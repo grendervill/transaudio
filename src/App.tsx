@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { FilesScreen } from "./components/FilesScreen";
+import { OnboardingModal } from "./components/OnboardingModal";
 import { ExportScreen } from "./components/ExportScreen";
 import { GlobalBar } from "./components/GlobalBar";
 import { Rail } from "./components/Rail";
+import { SettingsModal } from "./components/SettingsModal";
 import { Toast } from "./components/Toast";
 import { TranscriptionScreen } from "./components/TranscriptionScreen";
 import { Topbar } from "./components/Topbar";
@@ -47,6 +49,7 @@ export default function App({ backend }: AppProps) {
   const [queue, setQueue] = useState<QueueState | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -76,6 +79,7 @@ export default function App({ backend }: AppProps) {
       setModel(data.model);
       setQueue(data.queue);
       setSettings(data.settings);
+      setOnboardingOpen(data.model.stage === "consent_required");
     };
 
     subscribe().catch((error: unknown) => {
@@ -87,6 +91,10 @@ export default function App({ backend }: AppProps) {
       cleanups.forEach((cleanup) => cleanup());
     };
   }, [backend]);
+
+  useEffect(() => {
+    if (model?.stage === "ready") setOnboardingOpen(false);
+  }, [model?.stage]);
 
   const handlePause = useCallback(
     async (paused: boolean) => {
@@ -179,6 +187,27 @@ export default function App({ backend }: AppProps) {
     }
   };
 
+  const allowModel = async () => {
+    try {
+      const status = await backend.grantConsent();
+      setModel(status);
+      setSettings((current) =>
+        current ? { ...current, model_consent: true } : current,
+      );
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const retryModel = async () => {
+    try {
+      const status = await backend.downloadModel();
+      setModel(status);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const exportResults = async (ids: string[], format: ExportFormat) => {
     try {
       const result = await backend.exportResults(ids, format);
@@ -223,7 +252,12 @@ export default function App({ backend }: AppProps) {
 
   return (
     <div className="app">
-      <Rail screen={screen} model={model} onNavigate={setScreen} />
+      <Rail
+        screen={screen}
+        model={model}
+        onNavigate={setScreen}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
       <div className="shell">
         <Topbar
           fileCount={files.length}
@@ -271,15 +305,28 @@ export default function App({ backend }: AppProps) {
         </main>
         <GlobalBar queue={queue} files={files} model={model} onPause={handlePause} />
       </div>
-      {settingsOpen ? (
-        <div className="modal-backdrop" role="presentation">
-          <div className="modal" role="dialog" aria-modal="true" aria-label="Настройки">
-            <button type="button" className="icon-button" onClick={() => setSettingsOpen(false)}>
-              Закрыть
-            </button>
-          </div>
-        </div>
-      ) : null}
+      <OnboardingModal
+        open={onboardingOpen && model.stage !== "ready"}
+        model={model}
+        onAllow={allowModel}
+        onRetry={retryModel}
+        onDismiss={() => {
+          setOnboardingOpen(false);
+          if (model.stage === "consent_required") {
+            notify("Модель не загружена. Разрешение можно дать в настройках.");
+          }
+        }}
+      />
+      <SettingsModal
+        open={settingsOpen}
+        settings={settings}
+        model={model}
+        onClose={() => setSettingsOpen(false)}
+        onChooseFolder={chooseFolder}
+        onOpenFolder={openOutputDir}
+        onAllowModel={allowModel}
+        onRetryModel={retryModel}
+      />
       <Toast message={toast} onDone={() => setToast(null)} />
     </div>
   );

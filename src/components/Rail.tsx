@@ -5,6 +5,7 @@ interface RailProps {
   screen: Screen;
   model: ModelStatus;
   onNavigate: (screen: Screen) => void;
+  onOpenSettings: () => void;
 }
 
 const NAV: Array<{ id: Screen; label: string; icon: string }> = [
@@ -24,7 +25,7 @@ function modelTone(model: ModelStatus): string {
   }
 }
 
-export function Rail({ screen, model, onNavigate }: RailProps) {
+export function Rail({ screen, model, onNavigate, onOpenSettings }: RailProps) {
   return (
     <aside className="rail">
       <a className="brand" href="#" onClick={(event) => event.preventDefault()} aria-label="Transaudio">
@@ -50,7 +51,7 @@ export function Rail({ screen, model, onNavigate }: RailProps) {
           type="button"
           className="rail-link rail-settings"
           aria-label="Настройки"
-          onClick={() => undefined}
+          onClick={onOpenSettings}
         >
           <Icon name="settings" />
           <span>Настройки</span>
