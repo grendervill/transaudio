@@ -1,0 +1,244 @@
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use crate::config::ExportFormat;
+use crate::model::EngineSegment;
+
+pub fn srt_timestamp(seconds: f64) -> String {
+    let total_ms = (seconds.max(0.0) * 1000.0).round() as u64;
+    let millis = total_ms % 1000;
+    let total_seconds = total_ms / 1000;
+    let secs = total_seconds % 60;
+    let total_minutes = total_seconds / 60;
+    let minutes = total_minutes % 60;
+    let hours = total_minutes / 60;
+    format!("{hours:02}:{minutes:02}:{secs:02},{millis:03}")
+}
+
+pub fn format_duration(seconds: f64) -> String {
+    let total = seconds.max(0.0) as u64;
+    let secs = total % 60;
+    let minutes = (total / 60) % 60;
+    let hours = total / 3600;
+    if hours > 0 {
+        format!("{hours}:{minutes:02}:{secs:02}")
+    } else {
+        format!("{minutes}:{secs:02}")
+    }
+}
+
+fn human_timecode(seconds: f64) -> String {
+    let total = seconds.max(0.0) as u64;
+    let secs = total % 60;
+    let minutes = (total / 60) % 60;
+    let hours = total / 3600;
+    format!("{hours:02}:{minutes:02}:{secs:02}")
+}
+
+pub fn render(
+    format: ExportFormat,
+    name: &str,
+    segments: &[EngineSegment],
+    duration_secs: f64,
+) -> String {
+    match format {
+        ExportFormat::Md => render_markdown(name, segments, duration_secs),
+        ExportFormat::Srt => render_srt(segments),
+        ExportFormat::Txt => render_txt(segments),
+    }
+}
+
+fn render_markdown(name: &str, segments: &[EngineSegment], duration_secs: f64) -> String {
+    let mut output = format!(
+        "# {name}
+
+**Длительность:** {}
+**Движок:** Parakeet V3 · локально
+
+---
+
+",
+        format_duration(duration_secs)
+    );
+    for segment in segments {
+        let text = segment.text.trim();
+        if text.is_empty() {
+            continue;
+        }
+        output.push_str(&format!(
+            "**[{}]** {text}
+
+",
+            human_timecode(segment.start)
+        ));
+    }
+    output
+}
+
+fn render_srt(segments: &[EngineSegment]) -> String {
+    let mut output = String::new();
+    for (index, segment) in segments.iter().enumerate() {
+        let text = segment.text.trim();
+        if text.is_empty() {
+            continue;
+        }
+        let end = segment.end.max(segment.start);
+        output.push_str(&format!(
+            "{}\n{} --> {}\n{}\n\n",
+            index + 1,
+            srt_timestamp(segment.start),
+            srt_timestamp(end),
+            text
+        ));
+    }
+    output
+}
+
+fn render_txt(segments: &[EngineSegment]) -> String {
+    let mut output = segments
+        .iter()
+        .map(|segment| segment.text.trim())
+        .filter(|text| !text.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    if !output.is_empty() {
+        output.push('\n');
+    }
+    output
+}
+
+pub fn safe_stem(name: &str) -> String {
+    let mut sanitized = String::with_capacity(name.len());
+    for character in name.trim().chars() {
+        if character.is_control() || matches!(character, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') {
+            sanitized.push('_');
+        } else {
+            sanitized.push(character);
+        }
+    }
+    let trimmed = sanitized.trim_matches(|character| character == '.' || character == ' ');
+    let mut result: String = trimmed.chars().take(100).collect();
+    if result.is_empty() {
+        result = "transcript".into();
+    }
+    let upper = result.to_uppercase();
+    let reserved = matches!(
+        upper.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL"
+            | "COM1" | "COM2" | "COM3" | "COM4" | "COM5" | "COM6" | "COM7" | "COM8" | "COM9"
+            | "LPT1" | "LPT2" | "LPT3" | "LPT4" | "LPT5" | "LPT6" | "LPT7" | "LPT8" | "LPT9"
+    );
+    if reserved {
+        result.push('_');
+    }
+    result
+}
+
+pub fn write_result(
+    output_dir: &Path,
+    name: &str,
+    format: ExportFormat,
+    segments: &[EngineSegment],
+    duration_secs: f64,
+) -> Result<PathBuf, String> {
+    fs::create_dir_all(output_dir)
+        .map_err(|error| format!("Не удалось создать папку результатов: {error}"))?;
+    let stem = safe_stem(name);
+    let path = output_dir.join(format!("{stem}.{}", format.extension()));
+    let content = render(format, name, segments, duration_secs);
+    fs::write(&path, content)
+        .map_err(|error| format!("Не удалось сохранить расшифровку: {error}"))?;
+    Ok(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::TempDir;
+
+    use crate::config::ExportFormat;
+    use crate::model::EngineSegment;
+
+    use super::{format_duration, render, safe_stem, srt_timestamp, write_result};
+
+    fn segments() -> Vec<EngineSegment> {
+        vec![
+            EngineSegment {
+                start: 3.0,
+                end: 7.5,
+                text: "Первая фраза.".into(),
+            },
+            EngineSegment {
+                start: 8.25,
+                end: 12.0,
+                text: "Вторая фраза.".into(),
+            },
+        ]
+    }
+
+    #[test]
+    fn formats_srt_timestamps_with_carry() {
+        assert_eq!(srt_timestamp(0.0), "00:00:00,000");
+        assert_eq!(srt_timestamp(3.0), "00:00:03,000");
+        assert_eq!(srt_timestamp(59.9996), "00:01:00,000");
+        assert_eq!(srt_timestamp(3661.5), "01:01:01,500");
+    }
+
+    #[test]
+    fn formats_human_duration() {
+        assert_eq!(format_duration(0.0), "0:00");
+        assert_eq!(format_duration(62.0), "1:02");
+        assert_eq!(format_duration(3723.0), "1:02:03");
+    }
+
+    #[test]
+    fn renders_srt() {
+        let output = render(ExportFormat::Srt, "Лекция", &segments(), 12.0);
+        assert!(output.contains("1\n00:00:03,000 --> 00:00:07,500\nПервая фраза."));
+        assert!(output.contains("2\n00:00:08,250 --> 00:00:12,000\nВторая фраза."));
+        assert!(output.ends_with('\n'));
+    }
+
+    #[test]
+    fn renders_markdown_with_header_and_timecodes() {
+        let output = render(ExportFormat::Md, "Лекция", &segments(), 12.0);
+        assert!(output.starts_with("# Лекция\n"));
+        assert!(output.contains("**Длительность:** 0:12"));
+        assert!(output.contains("**[00:00:03]** Первая фраза."));
+        assert!(output.contains("**[00:00:08]** Вторая фраза."));
+    }
+
+    #[test]
+    fn renders_plain_text_without_timecodes() {
+        let output = render(ExportFormat::Txt, "Лекция", &segments(), 12.0);
+        assert_eq!(output, "Первая фраза.\n\nВторая фраза.\n");
+    }
+
+    #[test]
+    fn sanitizes_names_for_all_platforms() {
+        assert_eq!(safe_stem("Лекция: часть 1/2?"), "Лекция_ часть 1_2_");
+        assert_eq!(safe_stem("CON"), "CON_");
+        assert_eq!(safe_stem("  ...  "), "transcript");
+        assert_eq!(safe_stem(""), "transcript");
+        assert_eq!(safe_stem("нормальное имя"), "нормальное имя");
+        let long = safe_stem(&"я".repeat(130));
+        assert_eq!(long.chars().count(), 100);
+    }
+
+    #[test]
+    fn writes_file_with_correct_extension() {
+        let temp = TempDir::new().unwrap();
+        let path = write_result(
+            temp.path(),
+            "Лекция 11",
+            ExportFormat::Srt,
+            &segments(),
+            12.0,
+        )
+        .unwrap();
+        assert_eq!(path.file_name().unwrap(), "Лекция 11.srt");
+        let content = fs::read_to_string(path).unwrap();
+        assert!(content.contains("00:00:03,000"));
+    }
+}

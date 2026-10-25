@@ -11,6 +11,7 @@ use crate::state::{AppPaths, AppState};
 pub mod audio;
 pub mod commands;
 pub mod config;
+pub mod export;
 pub mod model;
 pub mod state;
 pub mod transcribe;
