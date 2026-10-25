@@ -384,7 +384,17 @@ impl ModelManager {
         std::thread::spawn(
             move || match run_guarded(|| manager.download_and_install()) {
                 Ok(Ok(())) => {}
-                Ok(Err(error)) => manager.finish_error(error.to_string()),
+                Ok(Err(error)) => {
+                    log(format!("download failed: {error}"));
+                    let message = if matches!(&error, ModelError::Http(_)) {
+                        "Не удалось связаться с сервером модели. \
+Проверьте интернет, прокси и брандмауэр."
+                            .to_string()
+                    } else {
+                        error.to_string()
+                    };
+                    manager.finish_error(message);
+                }
                 Err(panic) => {
                     manager.finish_error(format!("Внутренняя ошибка загрузки модели: {panic}"));
                 }
