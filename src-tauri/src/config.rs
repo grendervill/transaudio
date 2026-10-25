@@ -113,8 +113,6 @@ fn ensure_output_dir(path: &Path) -> Result<(), ConfigError> {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::path::PathBuf;
-
     use tempfile::TempDir;
 
     use super::{ExportFormat, SettingsStore};
@@ -167,7 +165,7 @@ mod tests {
         let config_path = temp.path().join("settings.json");
         let mut store =
             SettingsStore::load_or_default(&config_path, temp.path().join("out")).unwrap();
-        let custom = PathBuf::from(temp.path().join("Новая папка"));
+        let custom = temp.path().join("Новая папка");
 
         store.set_output_dir(custom.clone()).unwrap();
 

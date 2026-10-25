@@ -90,4 +90,24 @@ describe("ExportScreen", () => {
     expect(onOpenFolder).toHaveBeenCalled();
     expect(screen.getByText("/Users/test/Documents/Transaudio")).toBeInTheDocument();
   });
+  it("keeps the user's selection when completed rows refresh", async () => {
+    const user = userEvent.setup();
+    const props = {
+      completed,
+      outputDir: "/Users/test/Documents/Transaudio",
+      initialFormat: "md" as const,
+      onChooseFolder: vi.fn(),
+      onOpenFolder: vi.fn(),
+      onExport: vi.fn(async () => {}),
+    };
+    const { rerender } = render(<ExportScreen {...props} />);
+
+    await user.click(screen.getByRole("checkbox", { name: /Интервью с Анной Петровой/ }));
+    rerender(<ExportScreen {...props} completed={completed.map((file) => ({ ...file }))} />);
+
+    expect(
+      screen.getByRole("checkbox", { name: /Интервью с Анной Петровой/ }),
+    ).not.toBeChecked();
+  });
+
 });

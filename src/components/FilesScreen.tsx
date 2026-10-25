@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { formatBytes, formatDuration } from "../lib/format";
 import type { Backend, ModelStatus, QueueFile, QueueStatus } from "../types";
@@ -61,6 +61,8 @@ export function FilesScreen({
     files.length > 0 && model.stage === "ready" && !busy;
   const totalBytes = files.reduce((sum, file) => sum + file.size_bytes, 0);
   const knownDurations = files.reduce((sum, file) => sum + (file.duration_secs ?? 0), 0);
+  const latest = useRef({ busy, onAddPaths, onNotify });
+  latest.current = { busy, onAddPaths, onNotify };
 
   useEffect(() => {
     let alive = true;
@@ -74,11 +76,12 @@ export function FilesScreen({
           setDragging(false);
         }
         if (event.type === "drop") {
-          if (busy) {
-            onNotify?.("Добавить файлы можно после завершения текущей очереди.");
+          const callbacks = latest.current;
+          if (callbacks.busy) {
+            callbacks.onNotify?.("Добавить файлы можно после завершения текущей очереди.");
             return;
           }
-          if (event.paths.length) onAddPaths(event.paths);
+          if (event.paths.length) callbacks.onAddPaths(event.paths);
         }
       })
       .then((unlisten) => {
@@ -91,7 +94,7 @@ export function FilesScreen({
       alive = false;
       cleanup?.();
     };
-  }, [backend, busy, onAddPaths, onNotify]);
+  }, [backend]);
 
   async function pickFiles() {
     try {

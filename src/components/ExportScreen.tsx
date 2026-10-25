@@ -38,10 +38,11 @@ export function ExportScreen({
   );
   const [format, setFormat] = useState<ExportFormat>(initialFormat);
   const [busy, setBusy] = useState(false);
+  const completedKey = completed.map((file) => file.id).join("|");
 
   useEffect(() => {
-    setSelected(new Set(completed.map((file) => file.id)));
-  }, [completed]);
+    setSelected(new Set(completedKey ? completedKey.split("|") : []));
+  }, [completedKey]);
 
   const chosen = completed.filter((file) => selected.has(file.id));
   const allSelected = completed.length > 0 && chosen.length === completed.length;

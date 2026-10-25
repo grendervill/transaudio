@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -105,4 +105,28 @@ describe("FilesScreen", () => {
     ).toBeDisabled();
     expect(screen.getByRole("button", { name: "Начать" })).toBeDisabled();
   });
+  it("subscribes to native file drops once, not on every parent render", async () => {
+    const onDragDrop = vi.fn(async (_callback: (event: { type: string }) => void) => () => {});
+    const backend = createFakeBackend({ onDragDrop });
+    const props = {
+      backend,
+      files: [],
+      model: readyModel,
+      outputDir: "/tmp/out",
+      queueStatus: "idle" as const,
+      onAddPaths: vi.fn(),
+      onRemoveFile: vi.fn(),
+      onStart: vi.fn(),
+      onChooseFolder: vi.fn(),
+      onOpenSettings: vi.fn(),
+      onNotify: vi.fn(),
+    };
+    const { rerender } = render(<FilesScreen {...props} />);
+    await waitFor(() => expect(onDragDrop).toHaveBeenCalledTimes(1));
+
+    rerender(<FilesScreen {...props} onNotify={vi.fn()} />);
+
+    await waitFor(() => expect(onDragDrop).toHaveBeenCalledTimes(1));
+  });
+
 });

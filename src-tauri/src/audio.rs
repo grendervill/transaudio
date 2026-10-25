@@ -76,7 +76,7 @@ impl AudioEngine {
             .map_err(|error| format!("Не удалось создать папку для FFmpeg: {error}"))?;
         let url = ffmpeg_sidecar::download::ffmpeg_download_url()
             .map_err(|error| format!("Не удалось определить сборку FFmpeg: {error}"))?;
-        let archive = ffmpeg_sidecar::download::download_ffmpeg_package(&url, &self.bin_dir)
+        let archive = ffmpeg_sidecar::download::download_ffmpeg_package(url, &self.bin_dir)
             .map_err(|error| format!("Не удалось скачать FFmpeg: {error}"))?;
         ffmpeg_sidecar::download::unpack_ffmpeg_without_extras(&archive, &self.bin_dir)
             .map_err(|error| format!("Не удалось распаковать FFmpeg: {error}"))?;
