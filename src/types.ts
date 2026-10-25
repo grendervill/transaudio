@@ -27,6 +27,15 @@ export type ModelFamily =
   | "sensevoice"
   | "qwen";
 
+export type DiarizationStage = "not_downloaded" | "downloading" | "ready" | "error";
+
+export interface DiarizationStatus {
+  stage: DiarizationStage;
+  progress: number;
+  error: string | null;
+  revision?: number;
+}
+
 export interface ModelCard {
   id: string;
   name: string;
@@ -74,6 +83,7 @@ export interface Bootstrap {
   model: ModelStatus;
   selected_model: string;
   models: ModelCard[];
+  diarization: DiarizationStatus;
   queue: QueueState;
 }
 
@@ -152,6 +162,7 @@ export interface Backend {
   selectModel(id: string, language?: string): Promise<ModelCard[]>;
   deleteModel(id: string): Promise<ModelCard[]>;
   setCanaryLanguage(language: string): Promise<Settings>;
+  setDiarization(enabled: boolean, scenario: string): Promise<DiarizationStatus>;
   setOutputDir(path: string): Promise<Settings>;
   exportResults(ids: string[], format: ExportFormat): Promise<ExportResult>;
   openOutputDir(): Promise<void>;
@@ -160,5 +171,6 @@ export interface Backend {
   onModelStatus(callback: (status: ModelStatus) => void): Promise<() => void>;
   onFileUpdate(callback: (update: FileUpdate) => void): Promise<() => void>;
   onQueueState(callback: (state: QueueState) => void): Promise<() => void>;
+  onDiarizationStatus(callback: (status: DiarizationStatus) => void): Promise<() => void>;
   onDragDrop(callback: (event: DragDropEvent) => void): Promise<() => void>;
 }

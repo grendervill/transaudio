@@ -3,6 +3,7 @@ use std::sync::Mutex;
 
 use crate::audio::AudioEngine;
 use crate::config::SettingsStore;
+use crate::diarize::DiarizationManager;
 use crate::model::ModelManager;
 use crate::transcribe::QueueRuntime;
 
@@ -31,6 +32,7 @@ pub struct AppState {
     pub model: std::sync::Arc<ModelManager>,
     pub audio: std::sync::Arc<AudioEngine>,
     pub queue: std::sync::Arc<QueueRuntime>,
+    pub diarization: std::sync::Arc<DiarizationManager>,
 }
 
 impl AppState {
@@ -40,6 +42,7 @@ impl AppState {
         model: std::sync::Arc<ModelManager>,
         audio: std::sync::Arc<AudioEngine>,
         queue: std::sync::Arc<QueueRuntime>,
+        diarization: std::sync::Arc<DiarizationManager>,
     ) -> Self {
         Self {
             settings: Mutex::new(settings),
@@ -47,6 +50,7 @@ impl AppState {
             model,
             audio,
             queue,
+            diarization,
         }
     }
 }

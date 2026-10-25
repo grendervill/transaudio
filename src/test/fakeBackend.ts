@@ -1,6 +1,7 @@
 import type {
   Backend,
   Bootstrap,
+  DiarizationStatus,
   ModelCard,
   DragDropEvent,
   FileUpdate,
@@ -29,6 +30,12 @@ const readyModel: ModelStatus = {
   progress: 100,
   downloaded_bytes: null,
   total_bytes: null,
+  error: null,
+};
+
+const idleDiarization: DiarizationStatus = {
+  stage: "not_downloaded",
+  progress: 0,
   error: null,
 };
 
@@ -86,6 +93,7 @@ export const defaultBootstrap: Bootstrap = {
   model: readyModel,
   selected_model: "parakeet-tdt-0.6b-v3",
   models: sampleModels,
+  diarization: idleDiarization,
   queue: idleQueue,
 };
 
@@ -113,6 +121,11 @@ export function createFakeBackend(overrides: Partial<Backend> = {}): Backend {
       ...consentSettings,
       canary_language: language,
     }),
+    setDiarization: async (enabled: boolean, scenario: string): Promise<DiarizationStatus> => ({
+      stage: enabled ? "downloading" : "not_downloaded",
+      progress: 0,
+      error: null,
+    }),
     setOutputDir: async (path: string) => ({
       ...consentSettings,
       output_dir: path,
@@ -126,6 +139,7 @@ export function createFakeBackend(overrides: Partial<Backend> = {}): Backend {
     onModelStatus: async (_callback: (status: ModelStatus) => void) => () => {},
     onFileUpdate: async (_callback: (update: FileUpdate) => void) => () => {},
     onQueueState: async (_callback: (state: QueueState) => void) => () => {},
+    onDiarizationStatus: async (_callback: (status: DiarizationStatus) => void) => () => {},
     onDragDrop: async (_callback: (event: DragDropEvent) => void) => () => {},
     ...overrides,
   };

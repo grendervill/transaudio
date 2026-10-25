@@ -6,6 +6,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import type {
   Backend,
   Bootstrap,
+  DiarizationStatus,
   DragDropEvent,
   ExportFormat,
   ExportResult,
@@ -50,6 +51,8 @@ export function createTauriBackend(): Backend {
     deleteModel: (id) => invoke<ModelCard[]>("delete_model", { id }),
     setCanaryLanguage: (language) =>
       invoke<Settings>("set_canary_language", { language }),
+    setDiarization: (enabled, scenario) =>
+      invoke<DiarizationStatus>("set_diarization", { enabled, scenario }),
     setOutputDir: (path) => invoke<Settings>("set_output_dir", { path }),
     exportResults: (ids, format) =>
       invoke<ExportResult>("export_results", { ids, format }),
@@ -73,6 +76,8 @@ export function createTauriBackend(): Backend {
       listen<FileUpdate>("file-update", (event) => callback(event.payload)),
     onQueueState: (callback) =>
       listen<QueueState>("queue-state", (event) => callback(event.payload)),
+    onDiarizationStatus: (callback) =>
+      listen<DiarizationStatus>("diarization-status", (event) => callback(event.payload)),
     onDragDrop: async (callback) => {
       const unlisten = await getCurrentWebview().onDragDropEvent((event) => {
         const payload = event.payload;

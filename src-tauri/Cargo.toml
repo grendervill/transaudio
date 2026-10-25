@@ -1,7 +1,7 @@
 [package]
 name = "transaudio"
-version = "0.1.1"
-description = "Local audio and video transcription with Parakeet V3"
+version = "0.2.0"
+description = "Local audio and video transcription with Handy models"
 authors = ["Transaudio"]
 edition = "2021"
 rust-version = "1.90"
@@ -22,6 +22,7 @@ serde_json = "1"
 thiserror = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 transcribe-cpp = "0.4.1"
+sherpa-onnx = "2.0.0"
 hound = "3.5"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 sha2 = "0.10"

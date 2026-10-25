@@ -46,6 +46,13 @@ function SegmentList({ segments, live }: { segments: EngineSegment[]; live: bool
         >
           <time className="mono">{formatTimecode(segment.start)}</time>
           <div>
+            {segment.speaker ? (
+              <span
+                className={`speaker-chip speaker-${((segment.speaker - 1) % 6) + 1}`}
+              >
+                Спикер {segment.speaker}
+              </span>
+            ) : null}
             <p>{segment.text}</p>
             {live && index === segments.length - 1 ? (
               <span className="cursor" aria-hidden="true" />

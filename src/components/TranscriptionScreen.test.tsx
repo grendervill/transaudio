@@ -182,4 +182,22 @@ describe("TranscriptionScreen", () => {
     expect(screen.getByText("В файле нет аудиодорожки")).toBeInTheDocument();
   });
 
+  it("labels speaker turns when diarization is present", () => {
+    const withSpeakers = files.map((item) =>
+      item.id === "two"
+        ? {
+            ...item,
+            segments: [
+              { start: 1, end: 2, text: "Первая реплика.", speaker: 1 },
+              { start: 3, end: 4, text: "Ответ второго.", speaker: 2 },
+            ],
+          }
+        : item,
+    );
+    renderScreen({ files: withSpeakers, selectedId: "two" });
+
+    expect(screen.getByText("Спикер 1")).toBeInTheDocument();
+    expect(screen.getByText("Спикер 2")).toBeInTheDocument();
+  });
+
 });

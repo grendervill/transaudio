@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 
 import { formatBytes, formatDuration } from "../lib/format";
-import type { Backend, ModelStatus, QueueFile, QueueStatus } from "../types";
+import type {
+  Backend,
+  DiarizationStatus,
+  ModelStatus,
+  QueueFile,
+  QueueStatus,
+} from "../types";
 import { Icon } from "./Icon";
 
 interface FilesScreenProps {
@@ -10,6 +16,9 @@ interface FilesScreenProps {
   model: ModelStatus;
   modelName: string;
   outputDir: string;
+  diarizationEnabled: boolean;
+  diarizationScenario: string;
+  diarizationStatus: DiarizationStatus;
   queueStatus: QueueStatus;
   onAddPaths: (paths: string[]) => void;
   onRemoveFile: (id: string) => void;
@@ -19,6 +28,7 @@ interface FilesScreenProps {
   onChooseFolder: () => void;
   onOpenSettings: () => void;
   onOpenModels: () => void;
+  onDiarizationChange: (enabled: boolean, scenario: string) => void;
   onNotify?: (message: string) => void;
 }
 
@@ -52,6 +62,9 @@ export function FilesScreen({
   model,
   modelName,
   outputDir,
+  diarizationEnabled,
+  diarizationScenario,
+  diarizationStatus,
   queueStatus,
   onAddPaths,
   onRemoveFile,
@@ -61,6 +74,7 @@ export function FilesScreen({
   onChooseFolder,
   onOpenSettings,
   onOpenModels,
+  onDiarizationChange,
   onNotify,
 }: FilesScreenProps) {
   const [dragging, setDragging] = useState(false);
@@ -293,6 +307,63 @@ export function FilesScreen({
               className={`ready-dot ${model.stage === "ready" ? "is-ready" : ""}`}
               aria-hidden="true"
             />
+          </section>
+          <section className="aside-block speakers-block">
+            <div className="aside-label-row">
+              <p className="aside-label">Спикеры</p>
+              <label className="speaker-toggle">
+                <input
+                  type="checkbox"
+                  checked={diarizationEnabled}
+                  onChange={(event) =>
+                    onDiarizationChange(event.target.checked, diarizationScenario)
+                  }
+                  aria-label="Разделять спикеров"
+                />
+                <span aria-hidden="true" />
+              </label>
+            </div>
+            <select
+              className="speaker-scenario"
+              value={diarizationScenario}
+              disabled={!diarizationEnabled}
+              aria-label="Сценарий записи"
+              onChange={(event) =>
+                onDiarizationChange(diarizationEnabled, event.target.value)
+              }
+            >
+              <option value="interview">Интервью / диалог (2–3)</option>
+              <option value="meeting">Встреча (4–6)</option>
+              <option value="many">Много участников (7+)</option>
+              <option value="auto">Авто</option>
+            </select>
+            {diarizationEnabled && diarizationStatus.stage === "downloading" ? (
+              <div className="speaker-download">
+                <div
+                  className="mini-track"
+                  role="progressbar"
+                  aria-label="Загрузка моделей спикеров"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(diarizationStatus.progress)}
+                >
+                  <i style={{ width: `${diarizationStatus.progress}%` }} />
+                </div>
+                <span className="mono">
+                  {Math.round(diarizationStatus.progress)}%
+                </span>
+              </div>
+            ) : diarizationEnabled && diarizationStatus.stage === "ready" ? (
+              <p className="small muted speakers-ready">Модели спикеров готовы</p>
+            ) : diarizationEnabled && diarizationStatus.stage === "error" ? (
+              <p className="small speakers-error">{diarizationStatus.error}</p>
+            ) : (
+              <p className="small muted">
+                {diarizationEnabled
+                  ? "Модели спикеров ~35 МБ, скачиваются один раз."
+                  : "По умолчанию выключено."}
+              </p>
+            )}
           </section>
           <section className="aside-block">
             <p className="aside-label">Пока идёт работа</p>

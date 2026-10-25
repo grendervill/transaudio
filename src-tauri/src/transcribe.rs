@@ -7,8 +7,9 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
-use crate::audio::{AudioEngine, WavChunker, SAMPLE_RATE};
+use crate::audio::{read_wav_samples, AudioEngine, WavChunker, SAMPLE_RATE};
 use crate::config::ExportFormat;
+use crate::diarize::DiarizationManager;
 use crate::export;
 use crate::model::{EngineSegment, ModelManager};
 
@@ -86,6 +87,7 @@ pub struct CompletedTranscript {
     pub segments: Vec<EngineSegment>,
     pub duration_secs: f64,
     pub saved_path: String,
+    pub engine: String,
 }
 
 #[derive(Default)]
@@ -354,6 +356,8 @@ pub fn run_batch(
     output_dir: PathBuf,
     jobs: Vec<FileJob>,
     runtime: Arc<QueueRuntime>,
+    diarization: Option<Arc<DiarizationManager>>,
+    scenario: String,
 ) {
     emit_queue(
         &app,
@@ -386,7 +390,17 @@ pub fn run_batch(
             },
         );
 
-        match transcribe_file(&app, &model, &audio, &runtime, &cache_dir, &output_dir, job) {
+        match transcribe_file(
+            &app,
+            &model,
+            &audio,
+            &runtime,
+            &cache_dir,
+            &output_dir,
+            job,
+            diarization.as_deref(),
+            &scenario,
+        ) {
             Ok(completed) => {
                 if let Ok(mut results) = runtime.results.lock() {
                     results.insert(completed.id.clone(), completed.clone());
@@ -450,6 +464,7 @@ pub fn run_batch(
     emit_queue(&app, &state);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn transcribe_file(
     app: &AppHandle,
     model: &ModelManager,
@@ -458,6 +473,8 @@ fn transcribe_file(
     cache_dir: &Path,
     output_dir: &Path,
     job: &FileJob,
+    diarization: Option<&DiarizationManager>,
+    scenario: &str,
 ) -> Result<CompletedTranscript, FileFailure> {
     let temp = tempfile::Builder::new()
         .prefix("transaudio-")
@@ -469,12 +486,45 @@ fn transcribe_file(
     audio
         .extract_wav(Path::new(&job.path), &wav_path)
         .map_err(FileFailure::File)?;
-    let mut chunker = WavChunker::open(&wav_path).map_err(FileFailure::File)?;
-    let total_samples = chunker.total_samples();
-    if total_samples == 0 {
-        return Err(FileFailure::File("В файле нет аудиодорожки".into()));
+
+    let (all_segments, duration_secs) = if let Some(diarizer) = diarization {
+        transcribe_turns(app, model, runtime, job, &wav_path, diarizer, scenario)?
+    } else {
+        transcribe_chunks(app, model, runtime, job, &wav_path)?
+    };
+
+    if all_segments.is_empty() {
+        return Err(FileFailure::File("Речь не распознана".into()));
     }
-    let duration_secs = chunker.duration_secs();
+
+    let source_stem = Path::new(&job.name)
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or(&job.name);
+    let saved_path = export::write_result(
+        output_dir,
+        source_stem,
+        ExportFormat::Md,
+        &all_segments,
+        duration_secs,
+        &model.selected_name(),
+    )
+    .map_err(FileFailure::File)?
+    .to_string_lossy()
+    .to_string();
+
+    Ok(CompletedTranscript {
+        id: job.id.clone(),
+        name: job.name.clone(),
+        source_path: job.path.clone(),
+        segments: all_segments,
+        duration_secs,
+        saved_path,
+        engine: model.selected_name(),
+    })
+}
+
+fn emit_started(app: &AppHandle, runtime: &QueueRuntime, job: &FileJob, duration_secs: f64) {
     runtime.set_progress(5.0);
     emit_queue(app, &runtime.state());
     emit_file(
@@ -490,6 +540,22 @@ fn transcribe_file(
             error: None,
         },
     );
+}
+
+fn transcribe_chunks(
+    app: &AppHandle,
+    model: &ModelManager,
+    runtime: &QueueRuntime,
+    job: &FileJob,
+    wav_path: &Path,
+) -> Result<(Vec<EngineSegment>, f64), FileFailure> {
+    let mut chunker = WavChunker::open(wav_path).map_err(FileFailure::File)?;
+    let total_samples = chunker.total_samples();
+    if total_samples == 0 {
+        return Err(FileFailure::File("В файле нет аудиодорожки".into()));
+    }
+    let duration_secs = chunker.duration_secs();
+    emit_started(app, runtime, job, duration_secs);
 
     let mut all_segments = Vec::new();
     let mut last_progress = 5.0_f32;
@@ -544,35 +610,93 @@ fn transcribe_file(
             },
         );
     }
+    Ok((all_segments, duration_secs))
+}
 
-    if all_segments.is_empty() {
-        return Err(FileFailure::File("Речь не распознана".into()));
+fn transcribe_turns(
+    app: &AppHandle,
+    model: &ModelManager,
+    runtime: &QueueRuntime,
+    job: &FileJob,
+    wav_path: &Path,
+    diarizer: &DiarizationManager,
+    scenario: &str,
+) -> Result<(Vec<EngineSegment>, f64), FileFailure> {
+    let samples = read_wav_samples(wav_path).map_err(FileFailure::File)?;
+    if samples.is_empty() {
+        return Err(FileFailure::File("В файле нет аудиодорожки".into()));
+    }
+    let duration_secs = samples.len() as f64 / SAMPLE_RATE as f64;
+    if duration_secs > 2.0 * 3600.0 {
+        return Err(FileFailure::File(
+            "Файл длиннее 2 часов. Отключите разделение спикеров для этого файла.".into(),
+        ));
+    }
+    emit_started(app, runtime, job, duration_secs);
+
+    let turns = diarizer
+        .diarize(&samples, scenario)
+        .map_err(FileFailure::Fatal)?;
+    let mut all_segments = Vec::new();
+    let mut last_progress = 5.0_f32;
+    let mut last_processed = 0.0_f64;
+
+    for turn in turns {
+        wait_for_resume(
+            runtime,
+            app,
+            &job.id,
+            last_progress,
+            Some(duration_secs),
+            Some(last_processed),
+        );
+        let start = ((turn.start * SAMPLE_RATE as f64) as usize).min(samples.len());
+        let end = ((turn.end * SAMPLE_RATE as f64) as usize).min(samples.len());
+        if end <= start {
+            continue;
+        }
+        let result = model
+            .transcribe(&samples[start..end])
+            .map_err(|error| FileFailure::Fatal(error.to_string()))?;
+        let mut new_segments = Vec::new();
+        for mut segment in result.segments {
+            segment.start = (segment.start + turn.start).max(0.0);
+            segment.end = (segment.end + turn.start).max(segment.start);
+            segment.speaker = Some(turn.speaker);
+            if !segment.text.trim().is_empty() {
+                new_segments.push(segment);
+            }
+        }
+        if !result.text.trim().is_empty() && new_segments.is_empty() {
+            new_segments.push(EngineSegment {
+                start: turn.start,
+                end: turn.end,
+                text: result.text,
+                speaker: Some(turn.speaker),
+            });
+        }
+        all_segments.extend(new_segments.iter().cloned());
+        let progress = (5.0 + 94.0 * (turn.end / duration_secs)).min(99.0) as f32;
+        last_progress = progress;
+        last_processed = turn.end;
+        runtime.set_progress(progress);
+        emit_queue(app, &runtime.state());
+        emit_file(
+            app,
+            &FileUpdate {
+                id: job.id.clone(),
+                status: FileStatus::Processing,
+                progress,
+                processed_secs: Some(last_processed),
+                duration_secs: Some(duration_secs),
+                new_segments: Some(new_segments),
+                saved_path: None,
+                error: None,
+            },
+        );
     }
 
-    let source_stem = Path::new(&job.name)
-        .file_stem()
-        .and_then(|value| value.to_str())
-        .unwrap_or(&job.name);
-    let saved_path = export::write_result(
-        output_dir,
-        source_stem,
-        ExportFormat::Md,
-        &all_segments,
-        duration_secs,
-        &model.selected_name(),
-    )
-    .map_err(FileFailure::File)?
-    .to_string_lossy()
-    .to_string();
-
-    Ok(CompletedTranscript {
-        id: job.id.clone(),
-        name: job.name.clone(),
-        source_path: job.path.clone(),
-        segments: all_segments,
-        duration_secs,
-        saved_path,
-    })
+    Ok((all_segments, duration_secs))
 }
 
 #[cfg(test)]
@@ -652,6 +776,7 @@ mod tests {
                 segments: Vec::new(),
                 duration_secs: 10.0,
                 saved_path: "/tmp/Готово.md".into(),
+                engine: "Parakeet TDT 0.6B v3".into(),
             },
         );
 

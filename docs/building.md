@@ -4,16 +4,23 @@
 
 - Node.js 20.19+ (лучше 22+).
 - Rust 1.90+ и Cargo.
+- **CMake и C++ toolchain** — движок `transcribe-cpp` и `sherpa-onnx`
+  собираются из исходников при первой сборке.
 - Платформенные зависимости Tauri 2:
-  - **macOS:** Xcode Command Line Tools.
-  - **Windows:** Visual Studio Build Tools с C++ workload и WebView2 Runtime (в Windows 10/11 обычно уже есть).
-  - **Linux:** Ubuntu 24.04 (glibc 2.39) или новее — предсобранный ONNX Runtime требует современный glibc. Нужны WebKitGTK 4.1, GTK/GLib, OpenSSL, librsvg и toolchain:
+  - **macOS:** Xcode Command Line Tools (включают clang и make) и CMake
+    (`brew install cmake`).
+  - **Windows:** Visual Studio Build Tools с C++ workload, CMake и WebView2
+    Runtime (в Windows 10/11 обычно уже есть).
+  - **Linux:** Ubuntu 24.04 (glibc 2.39) или новее — предсобранный ONNX Runtime,
+    который использует sherpa-onnx, требует современный glibc. Нужны WebKitGTK
+    4.1, GTK/GLib, OpenSSL, librsvg, CMake и toolchain:
     ```bash
     sudo apt update
-    sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
+    sudo apt install libwebkit2gtk-4.1-dev build-essential cmake curl wget file \
       libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
     ```
-- Интернет при первом запуске — для загрузки модели Parakeet V3 и, при необходимости, FFmpeg.
+- Интернет при первом запуске — для загрузки выбранной модели и, при
+  необходимости, FFmpeg и моделей спикеров.
 
 ## Запуск для разработки
 
@@ -24,16 +31,20 @@ npm ci
 npm run tauri dev
 ```
 
-`tauri dev` сам запускает Vite на порту 1420. Окно приложения использует локальные шрифты из `public/fonts`.
+`tauri dev` сам запускает Vite на порту 1420. Окно использует локальные шрифты
+из `public/fonts`. Первая сборка C++ занимает несколько минут, дальше работает
+кэш.
 
-## Модель
+## Модели
 
-При первом запуске приложение показывает экран разрешения. После разрешения:
+При первом запуске открывается каталог моделей. Скачивается только выбранная,
+по требованию, с Hugging Face:
 
-- скачивается `parakeet-v3-int8` (~456 МБ архив, ~640 МБ на диске) с `blob.handy.computer`;
-- архив проверяется по SHA-256;
-- модель распаковывается в `$APP_DATA/models/parakeet-v3-int8`;
-- модель загружается в фоне при каждом следующем запуске.
+- GGUF-файл кладётся в `$APP_DATA/models/<id>/`;
+- размер и SHA-256 берутся из каталога и проверяются после загрузки;
+- выбранная модель сохраняется в `settings.json` и загружается при следующем
+  запуске;
+- переключение модели блокируется, пока выполняется очередь.
 
 `$APP_DATA`:
 
@@ -41,7 +52,17 @@ npm run tauri dev
 - Windows: `%APPDATA%\com.transaudio.desktop`
 - Linux: `~/.local/share/com.transaudio.desktop`
 
-После выдачи разрешения оно хранится в `$APP_DATA/settings.json` (`model_consent: true`), повторно приложение его не запрашивает.
+Разрешение на загрузку моделей хранится в `settings.json`
+(`model_consent: true`) и повторно не запрашивается.
+
+### Диаризация
+
+При первом включении «Спикеров» скачиваются pyannote segmentation 3.0 и CAM++
+(~35 МБ). Они лежат в `$APP_DATA/models/diarization`. Проверка SHA-256 такая же.
+
+Сценарий выбирается рядом с переключателем: интервью (2–3), встреча (4–6),
+много участников (7+), авто. Для файлов длиннее 2 часов диаризация отключается —
+аудио читается в память целиком.
 
 ## FFmpeg
 
@@ -49,9 +70,10 @@ npm run tauri dev
 
 1. ищет `$APP_DATA/bin/ffmpeg`;
 2. ищет `ffmpeg` в `PATH`;
-3. если не находит — скачивает сборку для текущей ОС в `$APP_DATA/bin` через `ffmpeg-sidecar`.
+3. если не находит — скачивает сборку для текущей ОС в `$APP_DATA/bin` через
+   `ffmpeg-sidecar`.
 
-На macOS с Homebrew можно поставить заранее:
+На macOS:
 
 ```bash
 brew install ffmpeg
@@ -86,33 +108,39 @@ npm run tauri build
 - Windows — `.msi` и `.exe`;
 - Linux — `.deb` и `.AppImage`.
 
-Для распространения macOS-сборки нужно подписать приложение Developer ID и нотаризовать его. Для Windows — подписать установщик. Эти шаги в CI без секретов не выполняются.
+Для распространения macOS-сборки нужно подписать приложение Developer ID и
+нотаризовать его. Для Windows — подписать установщик. В CI без секретов эти
+шаги не выполняются.
 
 ## Кроссплатформенные замечания
 
 - Все пути строятся через `PathBuf`/Tauri; в UI показывается путь текущей ОС.
 - Имена экспортируемых файлов очищаются от символов, запрещённых Windows/macOS.
-- ONNX Runtime линкуется в бинарник через `ort`; отдельный dylib на проверенной macOS-сборке не нужен.
+- `transcribe-cpp` линкуется статически; Metal включается на macOS
+  автоматически, на Windows/Linux используется CPU.
+- `sherpa-onnx` линкуется статически; отдельный dylib не нужен.
 - FFmpeg скачивается для платформы, на которой запущено приложение.
-- Проект не использует macOS-only API в Rust-ядре.
 
 ## GitHub Actions
 
-Workflow `.github/workflows/build.yml` собирает пять нативных целей: macOS Apple Silicon, Linux x64, Linux ARM64, Windows x64 и Windows ARM64. Linux-сборка использует Ubuntu 24.04 — это требование предсобранного ONNX Runtime. Для каждой цели запускаются `npm test`, `cargo test` и Tauri-сборка без подписи. Секреты для подписи в него не входят.
+Workflow `.github/workflows/build.yml` собирает пять нативных целей: macOS Apple
+Silicon, Linux x64, Linux ARM64, Windows x64 и Windows ARM64. Linux-сборка
+использует Ubuntu 24.04. Для каждой цели запускаются `npm test`, `cargo test` и
+Tauri-сборка без подписи. Секреты для подписи в него не входят.
 
 ## Если загрузка модели не начинается
 
-Проверьте `transaudio.log` в каталоге данных приложения (см. выше). В нём
-записываются старт приложения, сохранение разрешения, URL загрузки, HTTP-статус,
-ошибки сети и этапы распаковки.
+Проверьте `transaudio.log` в каталоге данных приложения. В нём записываются
+старт приложения, выбранная модель, URL загрузки, HTTP-статус, ошибки сети,
+этапы распаковки и загрузка моделей спикеров.
 
-Типичные причины на Windows:
+Типичные причины:
 
-- брандмауэр или антивирус блокирует исходящее HTTPS-соединение приложения;
-- корпоративный прокси не пропускает `blob.handy.computer` без явных настроек:
+- брандмауэр или антивирус блокирует исходящее HTTPS-соединение;
+- корпоративный прокси не пропускает `huggingface.co` или `github.com`:
   задайте `HTTPS_PROXY`/`HTTP_PROXY`;
-- прерванная загрузка: нажмите «Повторить», при ошибке SHA-256 удалите
-  `models/parakeet-v3-int8` и повторите.
+- прерванная загрузка: нажмите «Повторить»; при ошибке SHA-256 удалите папку
+  модели в `models/` и повторите.
 
 Соединение устанавливается с таймаутом 15 секунд, поэтому зависший запрос
 превращается в видимую ошибку, а не в «мёртвую» кнопку.

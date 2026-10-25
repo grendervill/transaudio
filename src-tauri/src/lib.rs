@@ -6,6 +6,7 @@ use tauri::{Emitter, Manager};
 
 use crate::audio::AudioEngine;
 use crate::config::SettingsStore;
+use crate::diarize::{DiarizationManager, DiarizationSink};
 use crate::model::{ModelManager, ModelPaths, StatusSink};
 use crate::state::{AppPaths, AppState};
 use crate::transcribe::QueueRuntime;
@@ -14,6 +15,7 @@ pub mod audio;
 pub mod catalog;
 pub mod commands;
 pub mod config;
+pub mod diarize;
 pub mod export;
 pub mod logging;
 pub mod model;
@@ -41,6 +43,7 @@ pub fn run() {
             commands::select_model,
             commands::delete_model,
             commands::set_canary_language,
+            commands::set_diarization,
             commands::grant_model_consent,
             commands::download_model,
             commands::bootstrap,
@@ -101,7 +104,23 @@ fn setup_state(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let audio = Arc::new(AudioEngine::new(paths.bin.clone()));
     let queue = Arc::new(QueueRuntime::default());
 
-    app.manage(AppState::new(settings, paths, model, audio, queue));
+    let diarization_handle = app.handle().clone();
+    let diarization_sink: DiarizationSink = Arc::new(move |status| {
+        let _ = diarization_handle.emit("diarization-status", status);
+    });
+    let diarization = DiarizationManager::new(paths.models.join("diarization"), diarization_sink);
+    if diarization.is_ready() {
+        logging::log("diarization: models found");
+    }
+
+    app.manage(AppState::new(
+        settings,
+        paths,
+        model,
+        audio,
+        queue,
+        diarization,
+    ));
     logging::log("startup complete");
     Ok(())
 }

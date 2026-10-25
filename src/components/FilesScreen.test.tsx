@@ -45,6 +45,13 @@ function renderScreen(overrides: Partial<ComponentProps<typeof FilesScreen>> = {
     model: readyModel,
     modelName: "Parakeet TDT 0.6B v3",
     outputDir: "/Users/test/Documents/Transaudio",
+    diarizationEnabled: false,
+    diarizationScenario: "interview",
+    diarizationStatus: {
+      stage: "not_downloaded" as const,
+      progress: 0,
+      error: null,
+    },
     queueStatus: "idle",
     onAddPaths: vi.fn(),
     onRemoveFile: vi.fn(),
@@ -54,6 +61,7 @@ function renderScreen(overrides: Partial<ComponentProps<typeof FilesScreen>> = {
     onChooseFolder: vi.fn(),
     onOpenSettings: vi.fn(),
     onOpenModels: vi.fn(),
+    onDiarizationChange: vi.fn(),
     ...overrides,
   };
   render(<FilesScreen {...props} />);
@@ -120,6 +128,9 @@ describe("FilesScreen", () => {
       model: readyModel,
       modelName: "Parakeet TDT 0.6B v3",
       outputDir: "/tmp/out",
+      diarizationEnabled: false,
+      diarizationScenario: "interview",
+      diarizationStatus: { stage: "not_downloaded" as const, progress: 0, error: null },
       queueStatus: "idle" as const,
       onAddPaths: vi.fn(),
       onRemoveFile: vi.fn(),
@@ -129,6 +140,7 @@ describe("FilesScreen", () => {
       onChooseFolder: vi.fn(),
       onOpenSettings: vi.fn(),
       onOpenModels: vi.fn(),
+      onDiarizationChange: vi.fn(),
       onNotify: vi.fn(),
     };
     const { rerender } = render(<FilesScreen {...props} />);

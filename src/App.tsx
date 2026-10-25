@@ -15,6 +15,7 @@ import type {
   Backend,
   Bootstrap,
   FileUpdate,
+  DiarizationStatus,
   ModelCard,
   ModelStatus,
   QueueFile,
@@ -55,6 +56,7 @@ export default function App({ backend }: AppProps) {
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [models, setModels] = useState<ModelCard[]>([]);
+  const [diarization, setDiarization] = useState<DiarizationStatus | null>(null);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -81,10 +83,16 @@ export default function App({ backend }: AppProps) {
           if (alive) setQueue(state);
         }),
       );
+      cleanups.push(
+        await backend.onDiarizationStatus((status) => {
+          if (alive) setDiarization(status);
+        }),
+      );
       const data = await backend.bootstrap();
       if (!alive) return;
       setBootstrap(data);
       setModels(data.models);
+      setDiarization(data.diarization);
       setModel((current) =>
         current ? reconcileModelStatus(current, data.model) : data.model,
       );
@@ -106,6 +114,15 @@ export default function App({ backend }: AppProps) {
       cleanups.forEach((cleanup) => cleanup());
     };
   }, [backend]);
+
+  useEffect(() => {
+    if (!settings?.diarization) return;
+    if (!diarization || diarization.stage !== "not_downloaded") return;
+    void backend
+      .setDiarization(true, settings.diarization_scenario)
+      .then(setDiarization)
+      .catch(() => {});
+  }, [settings?.diarization, diarization?.stage, backend]);
 
   useEffect(() => {
     if (model?.stage === "ready") {
@@ -175,6 +192,24 @@ export default function App({ backend }: AppProps) {
     }
   };
 
+  const changeDiarization = async (enabled: boolean, scenario: string) => {
+    try {
+      const status = await backend.setDiarization(enabled, scenario);
+      setDiarization(status);
+      setSettings((current) =>
+        current
+          ? {
+              ...current,
+              diarization: enabled,
+              diarization_scenario: scenario,
+            }
+          : current,
+      );
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const chooseLanguage = async (language: string) => {
     try {
       setSettings(await backend.setCanaryLanguage(language));
@@ -206,7 +241,7 @@ export default function App({ backend }: AppProps) {
     );
   }
 
-  if (!bootstrap || !model || !queue || !settings) {
+  if (!bootstrap || !model || !queue || !settings || !diarization) {
     return (
       <div className="boot-screen">
         <div className="boot-mark">
@@ -419,6 +454,9 @@ export default function App({ backend }: AppProps) {
               model={model}
               modelName={selectedModel?.name ?? "Модель"}
               outputDir={settings.output_dir}
+              diarizationEnabled={settings.diarization}
+              diarizationScenario={settings.diarization_scenario}
+              diarizationStatus={diarization}
               queueStatus={queue.status}
               onAddPaths={addPaths}
               onRemoveFile={(id) =>
@@ -430,6 +468,7 @@ export default function App({ backend }: AppProps) {
               onChooseFolder={chooseFolder}
               onOpenSettings={() => setSettingsOpen(true)}
               onOpenModels={() => setModelPickerOpen(true)}
+              onDiarizationChange={changeDiarization}
               onNotify={notify}
             />
           )}

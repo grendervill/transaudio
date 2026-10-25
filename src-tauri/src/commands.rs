@@ -230,6 +230,7 @@ pub struct BootstrapPayload {
     pub model: ModelStatus,
     pub selected_model: String,
     pub models: Vec<ModelCard>,
+    pub diarization: crate::diarize::DiarizationStatus,
     pub queue: crate::transcribe::QueueState,
 }
 
@@ -241,8 +242,30 @@ pub fn bootstrap(state: State<'_, AppState>) -> Result<BootstrapPayload, String>
         models: cards(&state),
         settings,
         model: state.model.status(),
+        diarization: state.diarization.status(),
         queue: state.queue.state(),
     })
+}
+
+#[tauri::command]
+pub fn set_diarization(
+    app: tauri::AppHandle,
+    enabled: bool,
+    scenario: String,
+    state: State<'_, AppState>,
+) -> Result<crate::diarize::DiarizationStatus, String> {
+    {
+        let mut store = state.settings.lock().map_err(|_| "Настройки недоступны")?;
+        store
+            .set_diarization(enabled, scenario)
+            .map_err(|error| error.to_string())?;
+    }
+    if enabled && !state.diarization.is_ready() {
+        state.diarization.start_download();
+    }
+    let status = state.diarization.status();
+    let _ = tauri::Emitter::emit(&app, "diarization-status", status.clone());
+    Ok(status)
 }
 
 #[tauri::command]
@@ -257,13 +280,22 @@ pub fn start_transcription(
     if files.is_empty() {
         return Err("Добавьте хотя бы один файл".into());
     }
-    let output_dir = state
+    let settings = state
         .settings
         .lock()
         .map_err(|_| "Настройки недоступны")?
         .settings()
-        .output_dir
         .clone();
+    if settings.diarization && !state.diarization.is_ready() {
+        return Err("Модели спикеров ещё не готовы. Дождитесь загрузки.".into());
+    }
+    let output_dir = settings.output_dir.clone();
+    let diarization = if settings.diarization {
+        Some(std::sync::Arc::clone(&state.diarization))
+    } else {
+        None
+    };
+    let scenario = settings.diarization_scenario.clone();
     let queue_state = state.queue.start(files.len())?;
     let runtime = std::sync::Arc::clone(&state.queue);
     let model = std::sync::Arc::clone(&state.model);
@@ -273,7 +305,15 @@ pub fn start_transcription(
     let _ = tauri::Emitter::emit(&app, "queue-state", queue_state.clone());
     std::thread::spawn(move || {
         crate::transcribe::run_batch(
-            app_handle, model, audio, cache_dir, output_dir, files, runtime,
+            app_handle,
+            model,
+            audio,
+            cache_dir,
+            output_dir,
+            files,
+            runtime,
+            diarization,
+            scenario,
         );
     });
     Ok(queue_state)
@@ -312,10 +352,7 @@ pub fn export_results(
         .results
         .lock()
         .map_err(|_| "Расшифровки недоступны")?;
-    let engine = crate::catalog::find(&state.model.selected_id())
-        .map(|spec| spec.name)
-        .unwrap_or("Transaudio");
-    let written = crate::export::export_completed(&results, &output_dir, &ids, format, engine)?;
+    let written = crate::export::export_completed(&results, &output_dir, &ids, format)?;
     Ok(ExportResult {
         files_written: written
             .into_iter()

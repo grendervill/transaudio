@@ -74,12 +74,20 @@ fn render_markdown(
         if text.is_empty() {
             continue;
         }
-        output.push_str(&format!(
-            "**[{}]** {text}
+        match segment.speaker {
+            Some(speaker) => output.push_str(&format!(
+                "**Спикер {speaker}** · [{}] {text}
 
 ",
-            human_timecode(segment.start)
-        ));
+                human_timecode(segment.start)
+            )),
+            None => output.push_str(&format!(
+                "**[{}]** {text}
+
+",
+                human_timecode(segment.start)
+            )),
+        }
     }
     output
 }
@@ -92,6 +100,10 @@ fn render_srt(segments: &[EngineSegment]) -> String {
             continue;
         }
         let end = segment.end.max(segment.start);
+        let text = match segment.speaker {
+            Some(speaker) => format!("Спикер {speaker}: {text}"),
+            None => text.to_string(),
+        };
         output.push_str(&format!(
             "{}\n{} --> {}\n{}\n\n",
             index + 1,
@@ -106,8 +118,16 @@ fn render_srt(segments: &[EngineSegment]) -> String {
 fn render_txt(segments: &[EngineSegment]) -> String {
     let mut output = segments
         .iter()
-        .map(|segment| segment.text.trim())
-        .filter(|text| !text.is_empty())
+        .filter_map(|segment| {
+            let text = segment.text.trim();
+            if text.is_empty() {
+                return None;
+            }
+            Some(match segment.speaker {
+                Some(speaker) => format!("Спикер {speaker}: {text}"),
+                None => text.to_string(),
+            })
+        })
         .collect::<Vec<_>>()
         .join("\n\n");
     if !output.is_empty() {
@@ -181,7 +201,6 @@ pub fn export_completed(
     output_dir: &Path,
     ids: &[String],
     format: ExportFormat,
-    engine: &str,
 ) -> Result<Vec<PathBuf>, String> {
     if ids.is_empty() {
         return Err("Выберите хотя бы одну расшифровку".into());
@@ -201,7 +220,7 @@ pub fn export_completed(
             format,
             &transcript.segments,
             transcript.duration_secs,
-            engine,
+            &transcript.engine,
         )?);
     }
     Ok(written)
@@ -388,6 +407,7 @@ mod tests {
                 segments: segments(),
                 duration_secs: 12.0,
                 saved_path: temp.path().join("Интервью.md").to_string_lossy().into(),
+                engine: "Parakeet TDT 0.6B v3".into(),
             },
         );
         results.insert(
@@ -399,17 +419,12 @@ mod tests {
                 segments: segments(),
                 duration_secs: 12.0,
                 saved_path: temp.path().join("Лекция.md").to_string_lossy().into(),
+                engine: "Parakeet TDT 0.6B v3".into(),
             },
         );
 
-        let written = export_completed(
-            &results,
-            temp.path(),
-            &["b".into()],
-            ExportFormat::Srt,
-            "Parakeet TDT 0.6B v3",
-        )
-        .unwrap();
+        let written =
+            export_completed(&results, temp.path(), &["b".into()], ExportFormat::Srt).unwrap();
 
         assert_eq!(written.len(), 1);
         assert_eq!(written[0].file_name().unwrap(), "Лекция.srt");
@@ -426,7 +441,6 @@ mod tests {
             temp.path(),
             &["missing".into()],
             ExportFormat::Txt,
-            "Parakeet TDT 0.6B v3",
         )
         .unwrap_err();
         assert!(error.contains("не найдена"));
@@ -464,5 +478,40 @@ mod tests {
         let name = safe_stem(&"😀".repeat(100));
         assert!(name.len() <= 120);
         assert!(!name.is_empty());
+    }
+    #[test]
+    fn includes_speakers_in_all_formats() {
+        let mut with_speakers = segments();
+        with_speakers[0].speaker = Some(1);
+        with_speakers[1].speaker = Some(2);
+
+        let markdown = render(
+            ExportFormat::Md,
+            "Интервью",
+            &with_speakers,
+            12.0,
+            "GigaAM v3 E2E-RNNT",
+        );
+        assert!(markdown.contains("**Спикер 1** · [00:00:03] Первая фраза."));
+        assert!(markdown.contains("**Спикер 2** · [00:00:08] Вторая фраза."));
+
+        let srt = render(
+            ExportFormat::Srt,
+            "Интервью",
+            &with_speakers,
+            12.0,
+            "GigaAM v3 E2E-RNNT",
+        );
+        assert!(srt.contains("Спикер 1: Первая фраза."));
+        assert!(srt.contains("Спикер 2: Вторая фраза."));
+
+        let txt = render(
+            ExportFormat::Txt,
+            "Интервью",
+            &with_speakers,
+            12.0,
+            "GigaAM v3 E2E-RNNT",
+        );
+        assert_eq!(txt, "Спикер 1: Первая фраза.\n\nСпикер 2: Вторая фраза.\n");
     }
 }
