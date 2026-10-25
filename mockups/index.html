@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Transaudio — четыре направления интерфейса</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/fonts/fonts.css">
+  <link rel="stylesheet" href="assets/base.css">
+  <link rel="stylesheet" href="css/index.css">
+</head>
+<body>
+<header class="topline">
+  <a class="topline-brand" href="index.html">
+    <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#audio-lines"></use></svg>
+    <span>transaudio</span>
+  </a>
+  <span class="topline-note">Макеты интерфейса, октябрь 2026</span>
+  <span class="topline-count mono">4 направления</span>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="hero-title">
+      <p class="eyebrow">Выбор визуального направления</p>
+      <h1>Четыре способа<br>слушать записи.</h1>
+    </div>
+    <div class="hero-aside">
+      <p>Один сценарий — четыре характера. В каждом макете есть три рабочих экрана, первый запуск с разрешением на загрузку Parakeet V3 и настройки папки. Очередь из нескольких файлов обрабатывается по одному.</p>
+      <p class="hero-tip">Откройте макет и переключайте экраны внутри приложения.</p>
+      <div class="flow" aria-label="Сценарий работы">
+        <span><i>01</i>Файлы</span>
+        <span class="flow-line"></span>
+        <span><i>02</i>Транскрипция</span>
+        <span class="flow-line"></span>
+        <span><i>03</i>Экспорт</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="gallery" aria-label="Варианты дизайна">
+    <article class="design-card" id="tape-room">
+      <a class="shot" href="01-tape-room.html" aria-label="Открыть макет Tape Room">
+        <img src="assets/shots/01-tape-room.png" alt="Тёмный интерфейс Tape Room: очередь файлов и расшифровка лекции" width="1440" height="900">
+        <span class="shot-open">Открыть <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#arrow-up-right"></use></svg></span>
+      </a>
+      <header class="card-head">
+        <div class="card-number mono">01</div>
+        <div class="card-title">
+          <h2 class="title-tape">Tape Room</h2>
+          <p>Полевой рекордер, который стал приложением</p>
+        </div>
+        <div class="palette" aria-label="Палитра Tape Room">
+          <i style="--c:#0e1210" title="#0E1210"></i>
+          <i style="--c:#1a201b" title="#1A201B"></i>
+          <i style="--c:#e4aa58" title="#E4AA58"></i>
+          <i style="--c:#d15c43" title="#D15C43"></i>
+          <i style="--c:#f0eee5" title="#F0EEE5"></i>
+        </div>
+      </header>
+      <p class="card-copy">Тёмный экран, плёночные метки и тихий янтарный акцент. Слева — плотная очередь записей, справа — расшифровка как рабочий документ. Внизу общий прогресс, рядом с текущим файлом — его собственный.</p>
+      <footer class="card-foot">
+        <span class="trait">для больших архивов</span>
+        <span class="trait">тёмная</span>
+        <span class="trait">высокая плотность</span>
+        <div class="card-links">
+          <a href="01-tape-room.html?modal=welcome">Первый запуск</a>
+          <a class="card-cta" href="01-tape-room.html">Открыть макет <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#arrow-up-right"></use></svg></a>
+        </div>
+      </footer>
+    </article>
+
+    <article class="design-card" id="editorial">
+      <a class="shot" href="02-editorial.html" aria-label="Открыть макет «Редакция»">
+        <img src="assets/shots/02-editorial.png" alt="Светлый журнальный интерфейс «Редакция» с крупной антиквой и синей полосой прогресса" width="1440" height="900" loading="lazy">
+        <span class="shot-open">Открыть <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#arrow-up-right"></use></svg></span>
+      </a>
+      <header class="card-head">
+        <div class="card-number mono">02</div>
+        <div class="card-title">
+          <h2 class="title-editorial">Редакция</h2>
+          <p>Письменный стол редактора</p>
+        </div>
+        <div class="palette" aria-label="Палитра «Редакция»">
+          <i style="--c:#f4f1e8" title="#F4F1E8"></i>
+          <i style="--c:#191711" title="#191711"></i>
+          <i style="--c:#2436c7" title="#2436C7"></i>
+          <i style="--c:#d44a2a" title="#D44A2A"></i>
+          <i style="--c:#ebe7da" title="#EBE7DA"></i>
+        </div>
+      </header>
+      <p class="card-copy">Крупная антиква, колонки, поля и цветная полоса выпуска внизу. Расшифровка выглядит как материал, который хочется читать, а очередь остаётся спокойным полем слева.</p>
+      <footer class="card-foot">
+        <span class="trait">для журналистов</span>
+        <span class="trait">светлая</span>
+        <span class="trait">литературная</span>
+        <div class="card-links">
+          <a href="02-editorial.html?modal=welcome">Первый запуск</a>
+          <a class="card-cta" href="02-editorial.html">Открыть макет <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#arrow-up-right"></use></svg></a>
+        </div>
+      </footer>
+    </article>
+
+    <article class="design-card" id="console">
+      <a class="shot" href="03-console.html" aria-label="Открыть макет «Пульт»">
+        <img src="assets/shots/03-console.png" alt="Светлая трёхпанельная консоль «Пульт» с очередью, текстом и сведениями о файле" width="1440" height="900" loading="lazy">
+        <span class="shot-open">Открыть <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#arrow-up-right"></use></svg></span>
+      </a>
+      <header class="card-head">
+        <div class="card-number mono">03</div>
+        <div class="card-title">
+          <h2 class="title-console">Пульт</h2>
+          <p>Рабочая консоль для ежедневных партий</p>
+        </div>
+        <div class="palette" aria-label="Палитра «Пульт»">
+          <i style="--c:#e8ecf2" title="#E8ECF2"></i>
+          <i style="--c:#101b2c" title="#101B2C"></i>
+          <i style="--c:#245cff" title="#245CFF"></i>
+          <i style="--c:#f2793d" title="#F2793D"></i>
+          <i style="--c:#ffffff" title="#FFFFFF"></i>
+        </div>
+      </header>
+      <p class="card-copy">Три функциональные панели, сегментированные шкалы и ощущение прибора, который всё держит под контролем. Самый практичный вариант для пакетной работы и частого возврата к очереди.</p>
+      <footer class="card-foot">
+        <span class="trait">для пакетной работы</span>
+        <span class="trait">трёхпанельная</span>
+        <span class="trait">деловая</span>
+        <div class="card-links">
+          <a href="03-console.html?modal=welcome">Первый запуск</a>
+          <a class="card-cta" href="03-console.html">Открыть макет <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#arrow-up-right"></use></svg></a>
+        </div>
+      </footer>
+    </article>
+
+    <article class="design-card" id="quiet">
+      <a class="shot" href="04-quiet.html" aria-label="Открыть макет «Тихая комната»">
+        <img src="assets/shots/04-quiet.png" alt="Мягкий светло-зелёный интерфейс «Тихая комната» с документом расшифровки и нижним пультом" width="1440" height="900" loading="lazy">
+        <span class="shot-open">Открыть <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#arrow-up-right"></use></svg></span>
+      </a>
+      <header class="card-head">
+        <div class="card-number mono">04</div>
+        <div class="card-title">
+          <h2 class="title-quiet">Тихая комната</h2>
+          <p>Читальня, а не панель управления</p>
+        </div>
+        <div class="palette" aria-label="Палитра «Тихая комната»">
+          <i style="--c:#dfe6da" title="#DFE6DA"></i>
+          <i style="--c:#1c392c" title="#1C392C"></i>
+          <i style="--c:#d96f48" title="#D96F48"></i>
+          <i style="--c:#fbfaf4" title="#FBFAF4"></i>
+          <i style="--c:#f3d8c8" title="#F3D8C8"></i>
+        </div>
+      </header>
+      <p class="card-copy">Мягкий зелёный, документ на бумаге и плавающий пульт с действием внизу. Интерфейс уходит с дороги и оставляет один фокус — текст, который вы читаете.</p>
+      <footer class="card-foot">
+        <span class="trait">для длинных интервью</span>
+        <span class="trait">воздух</span>
+        <span class="trait">один фокус</span>
+        <div class="card-links">
+          <a href="04-quiet.html?modal=welcome">Первый запуск</a>
+          <a class="card-cta" href="04-quiet.html">Открыть макет <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#arrow-up-right"></use></svg></a>
+        </div>
+      </footer>
+    </article>
+  </section>
+
+  <section class="next-step">
+    <div>
+      <p class="eyebrow">Что дальше</p>
+      <h2>Выберите направление —<br>и я соберу вокруг него приложение.</h2>
+    </div>
+    <div class="next-copy">
+      <p>Можно взять макет целиком или смешать: например, экран файлов из «Пульта», чтение из «Редакции», а нижнюю панель из «Тихой комнаты».</p>
+      <p class="mono">Transaudio · Tauri · Parakeet V3 · macOS / Windows / Linux</p>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <span>Transaudio — локальная расшифровка аудио и видео</span>
+  <span class="mono">4 макета / 3 экрана / 1 первый запуск</span>
+</footer>
+</body>
+</html>

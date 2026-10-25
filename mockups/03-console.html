@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Transaudio — Пульт</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/fonts/fonts.css">
+  <link rel="stylesheet" href="assets/base.css">
+  <link rel="stylesheet" href="css/03-console.css">
+</head>
+<body>
+<div class="app" data-default-screen="transcribe">
+  <header class="appbar">
+    <a class="wordmark" href="index.html" aria-label="Transaudio, выбрать другой макет">
+      <span class="wordmark-mark"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#audio-lines"></use></svg></span>
+      <span>transaudio</span>
+    </a>
+    <nav class="app-tabs" aria-label="Основная навигация">
+      <button type="button" data-go="files">
+        <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#folder"></use></svg>
+        Файлы
+        <span class="tab-count">4</span>
+      </button>
+      <button type="button" data-go="transcribe" class="is-active">
+        <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#captions"></use></svg>
+        Транскрипция
+      </button>
+      <button type="button" data-go="export">
+        <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#download"></use></svg>
+        Экспорт
+      </button>
+    </nav>
+    <div class="appbar-right">
+      <div class="engine-state">
+        <span class="state-dot"></span>
+        <span>Parakeet V3</span>
+        <span class="engine-note">модель готова</span>
+      </div>
+      <button class="appbar-button" type="button" data-open-modal="settings" aria-label="Настройки">
+        <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#settings"></use></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="screen" data-screen="files" aria-label="Добавление файлов">
+      <div class="files-console">
+        <section class="panel intake-panel">
+          <header class="panel-head intake-head">
+            <div>
+              <span class="eyebrow">Текущий проект</span>
+              <h1>Октябрьский архив</h1>
+            </div>
+            <div class="head-metric">
+              <span class="head-metric-value mono">4</span>
+              <span>файла</span>
+            </div>
+          </header>
+
+          <div class="dropzone" data-dropzone>
+            <span class="drop-icon"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#upload"></use></svg></span>
+            <div class="drop-copy">
+              <strong>Перетащите файлы сюда</strong>
+              <span>Аудио и видео до 8 ГБ. Поддерживаются MP3, WAV, M4A, FLAC, MP4, MOV, MKV.</span>
+            </div>
+            <button class="secondary-button" type="button" data-add-files>
+              <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#plus"></use></svg>
+              Выбрать
+            </button>
+            <input class="sr-only" type="file" multiple accept="audio/*,video/*" data-file-input>
+          </div>
+
+          <div class="list-toolbar">
+            <div class="list-title"><h2>Очередь</h2><span class="mono">3 ч 28 мин</span></div>
+            <span class="list-note">Файлы обрабатываются сверху вниз</span>
+          </div>
+
+          <ol class="file-table">
+            <li class="file-row is-done">
+              <span class="number mono">01</span>
+              <span class="file-type"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#file-audio"></use></svg></span>
+              <span class="file-name"><strong>Интервью с Анной Петровой</strong><span>M4A · 42:18 · 38,6 МБ</span></span>
+              <span class="file-progress-inline"><i style="width:100%"></i></span>
+              <span class="badge is-done"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#check"></use></svg>Готово</span>
+              <button class="more-button" type="button" aria-label="Меню файла"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#ellipsis"></use></svg></button>
+            </li>
+            <li class="file-row is-current">
+              <span class="number mono">02</span>
+              <span class="file-type"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#file-play"></use></svg></span>
+              <span class="file-name"><strong>Лекция 11. Компиляторы</strong><span>MP4 · 1:18:04 · 1,2 ГБ</span></span>
+              <span class="file-progress-inline"><i style="width:64%"></i></span>
+              <span class="badge is-working">64%</span>
+              <button class="more-button" type="button" aria-label="Меню файла"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#ellipsis"></use></svg></button>
+            </li>
+            <li class="file-row">
+              <span class="number mono">03</span>
+              <span class="file-type"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#audio-lines"></use></svg></span>
+              <span class="file-name"><strong>Подкаст, выпуск 07</strong><span>WAV · 56:33 · 498 МБ</span></span>
+              <span class="file-progress-inline"></span>
+              <span class="badge">В очереди</span>
+              <button class="more-button" type="button" aria-label="Меню файла"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#ellipsis"></use></svg></button>
+            </li>
+            <li class="file-row">
+              <span class="number mono">04</span>
+              <span class="file-type"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#mic"></use></svg></span>
+              <span class="file-name"><strong>Планёрка 24 октября</strong><span>MP3 · 31:07 · 74,1 МБ</span></span>
+              <span class="file-progress-inline"></span>
+              <span class="badge">В очереди</span>
+              <button class="more-button" type="button" aria-label="Меню файла"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#ellipsis"></use></svg></button>
+            </li>
+          </ol>
+        </section>
+
+        <aside class="panel launch-panel">
+          <header class="panel-head">
+            <div class="panel-title"><span class="panel-icon"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#sliders-horizontal"></use></svg></span><h2>Параметры запуска</h2></div>
+          </header>
+          <div class="launch-content">
+            <section class="setting-group">
+              <div class="setting-label"><span>Папка результатов</span><button class="link-button" type="button" data-choose-folder>Изменить</button></div>
+              <div class="path-box">
+                <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#folder"></use></svg>
+                <span class="mono" data-output-path>~/Documents/Transaudio</span>
+              </div>
+              <p class="help-text">Расшифровки и исходные записи будут рядом.</p>
+            </section>
+
+            <section class="setting-group">
+              <div class="setting-label"><span>Модель</span><span class="status-word">загружена</span></div>
+              <div class="engine-card">
+                <span class="engine-badge mono">V3</span>
+                <span class="engine-copy"><strong>Parakeet</strong><span>Локально · 2,4 ГБ · без сети</span></span>
+                <svg class="icon check-icon" aria-hidden="true"><use href="assets/icons/lucide.svg#circle-check"></use></svg>
+              </div>
+            </section>
+
+            <section class="setting-group">
+              <div class="setting-label"><span>Формат расшифровки</span><button class="link-button" type="button" data-show-toast="Формат можно изменить на экране экспорта.">Изменить</button></div>
+              <div class="choice-row">
+                <button class="choice is-active" type="button">MD</button>
+                <button class="choice" type="button" data-show-toast="Формат SRT будет доступен при экспорте.">SRT</button>
+                <button class="choice" type="button" data-show-toast="Формат TXT будет доступен при экспорте.">TXT</button>
+              </div>
+            </section>
+
+            <section class="estimate-block">
+              <div class="estimate-line"><span>4 файла</span><strong>3 ч 28 мин</strong></div>
+              <div class="estimate-line"><span>Примерно займёт</span><strong>≈ 18 мин</strong></div>
+              <div class="estimate-line"><span>Свободно на диске</span><strong>42,8 ГБ</strong></div>
+            </section>
+          </div>
+          <footer class="launch-footer">
+            <button class="primary-button" type="button" data-start>
+              <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#play"></use></svg>
+              Начать транскрибацию
+            </button>
+            <p>Можно свернуть окно — очередь продолжится.</p>
+          </footer>
+        </aside>
+      </div>
+    </section>
+
+    <section class="screen is-active" data-screen="transcribe" aria-label="Транскрибация">
+      <div class="console-grid">
+        <aside class="panel queue-panel">
+          <header class="panel-head">
+            <div class="panel-title"><span class="panel-icon"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#list-music"></use></svg></span><h2>Очередь</h2><span class="count-badge mono">04</span></div>
+            <button class="head-icon" type="button" data-add-files aria-label="Добавить файлы"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#plus"></use></svg></button>
+            <input class="sr-only" type="file" multiple accept="audio/*,video/*" data-file-input>
+          </header>
+          <ol class="queue-list">
+            <li class="queue-file is-done">
+              <button type="button" data-show-toast="В демо-макете открыт текущий файл.">
+                <span class="queue-number mono">01</span>
+                <span class="queue-copy"><strong>Интервью с Анной Петровой</strong><span>42:18 · 12 842 знака</span></span>
+                <span class="queue-state is-done"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#check"></use></svg></span>
+              </button>
+            </li>
+            <li class="queue-file is-current">
+              <button type="button" aria-current="true">
+                <span class="queue-number mono">02</span>
+                <span class="queue-copy"><strong>Лекция 11. Компиляторы</strong><span>MP4 · 1:18:04</span></span>
+                <span class="queue-pct mono">64%</span>
+              </button>
+              <div class="queue-meter" aria-hidden="true"><i style="width:64%"></i></div>
+            </li>
+            <li class="queue-file">
+              <button type="button" data-show-toast="Файл ждёт своей очереди.">
+                <span class="queue-number mono">03</span>
+                <span class="queue-copy"><strong>Подкаст, выпуск 07</strong><span>WAV · 56:33</span></span>
+                <span class="queue-state"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#clock"></use></svg></span>
+              </button>
+            </li>
+            <li class="queue-file">
+              <button type="button" data-show-toast="Файл ждёт своей очереди.">
+                <span class="queue-number mono">04</span>
+                <span class="queue-copy"><strong>Планёрка 24 октября</strong><span>MP3 · 31:07</span></span>
+                <span class="queue-state"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#clock"></use></svg></span>
+              </button>
+            </li>
+          </ol>
+          <div class="queue-summary">
+            <div class="summary-donut" style="--progress:41"><span class="mono">41%</span></div>
+            <div><span class="eyebrow">Общая готовность</span><strong>2 из 4 файлов</strong><p>Осталось около 1 ч 14 мин</p></div>
+          </div>
+        </aside>
+
+        <section class="panel transcript-panel">
+          <header class="panel-head transcript-toolbar">
+            <div class="panel-title"><span class="panel-icon"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#scan-text"></use></svg></span><h2>Транскрипция</h2></div>
+            <div class="toolbar-actions">
+              <button class="tool-button" type="button" data-copy><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#copy"></use></svg>Копировать</button>
+              <button class="head-icon" type="button" data-open-modal="settings" aria-label="Настройки"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#settings"></use></svg></button>
+            </div>
+          </header>
+
+          <div class="transcript-scroll" data-screen-scroll>
+            <button class="collapsed-file" type="button" data-show-toast="В демо-макете открыт текущий файл.">
+              <span class="collapsed-index mono">01</span>
+              <span class="collapsed-copy"><strong>Интервью с Анной Петровой</strong><span>«Если смотреть на архив, первое, что замечаешь — как меняется способ слушать…»</span></span>
+              <span class="badge is-done"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#check"></use></svg>Готово</span>
+              <svg class="icon chevron" aria-hidden="true"><use href="assets/icons/lucide.svg#chevron-down"></use></svg>
+            </button>
+
+            <article class="active-file">
+              <div class="file-topline">
+                <span class="mono">Файл 02 / 04</span>
+                <span class="live-state"><i></i>Идёт расшифровка</span>
+                <span class="mono">16 kHz · mono</span>
+              </div>
+              <div class="active-title-row">
+                <h1>Лекция 11. Компиляторы</h1>
+                <div class="title-tools">
+                  <button class="head-icon" type="button" data-show-toast="Оригинал файла откроется в системном плеере." aria-label="Открыть оригинал"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#file-play"></use></svg></button>
+                  <button class="head-icon" type="button" data-open-modal="settings" aria-label="Настройки"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#settings"></use></svg></button>
+                </div>
+              </div>
+              <div class="file-meta-row">
+                <span>MP4</span><span>1:18:04</span><span>1,2 ГБ</span><span>2 спикера</span><span>русский</span>
+              </div>
+
+              <div class="file-progress-block">
+                <div class="file-progress-head">
+                  <span class="eyebrow">Прогресс файла</span>
+                  <span class="file-percent mono">64%</span>
+                </div>
+                <div class="segmented-track" role="progressbar" aria-label="Прогресс текущего файла" aria-valuemin="0" aria-valuemax="100" aria-valuenow="64"><i style="width:64%"></i></div>
+                <div class="file-progress-meta"><span class="mono">52:10 / 1:18:04</span><span>осталось ≈ 26 мин</span></div>
+              </div>
+
+              <div class="transcript">
+                <div class="segment">
+                  <time class="mono" datetime="PT3S">00:03</time>
+                  <div><p class="speaker">Лектор</p><p class="text">Сегодня мы разберём, как исходный текст превращается в то, что процессор действительно умеет исполнять. Начнём с самого простого вопроса: зачем нужен ещё один слой между языком и машиной?</p></div>
+                </div>
+                <div class="segment">
+                  <time class="mono" datetime="PT41S">00:41</time>
+                  <div><p class="speaker">Лектор</p><p class="text">Компилятор — это не один шаг, а цепочка превращений. Лексемы становятся деревом, дерево — промежуточным представлением, и только потом появляется машинный код.</p></div>
+                </div>
+                <div class="segment">
+                  <time class="mono" datetime="PT1M26S">01:26</time>
+                  <div><p class="speaker is-second">Студент</p><p class="text">А интерпретатор — это тот же компилятор, только медленнее?</p></div>
+                </div>
+                <div class="segment">
+                  <time class="mono" datetime="PT1M33S">01:33</time>
+                  <div><p class="speaker">Лектор</p><p class="text">Не совсем. Интерпретатор исполняет программу, не создавая отдельного исполняемого файла. Компилятор же переводит её заранее. Но граница между ними сегодня почти стёрлась: многие среды делают и то, и другое по частям.</p></div>
+                </div>
+                <div class="segment is-live">
+                  <time class="mono" datetime="PT2M18S">02:18</time>
+                  <div><p class="speaker">Лектор <span class="cursor"></span></p><p class="text">Посмотрите на эту схему. Нас интересует не названия блоков, а то, какие решения принимаются на каждом переходе и что мы теряем по дороге.</p></div>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <aside class="panel details-panel">
+          <header class="panel-head">
+            <div class="panel-title"><span class="panel-icon"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#info"></use></svg></span><h2>Сведения</h2></div>
+            <button class="head-icon" type="button" data-close-panel aria-label="Скрыть сведения"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#chevron-right"></use></svg></button>
+          </header>
+          <div class="details-content">
+            <section class="detail-section">
+              <span class="eyebrow">Статус</span>
+              <div class="status-row"><span class="live-state"><i></i>В работе</span><span class="mono">осталось 26:04</span></div>
+              <p class="help-text">Расшифровка идёт на этом устройстве. Можно продолжать работать в других приложениях.</p>
+            </section>
+            <section class="detail-section">
+              <span class="eyebrow">Файл</span>
+              <dl class="detail-list">
+                <div><dt>Формат</dt><dd>MP4</dd></div>
+                <div><dt>Длительность</dt><dd>1:18:04</dd></div>
+                <div><dt>Размер</dt><dd>1,2 ГБ</dd></div>
+                <div><dt>Спикеры</dt><dd>2</dd></div>
+                <div><dt>Язык</dt><dd>RU</dd></div>
+              </dl>
+            </section>
+            <section class="detail-section">
+              <span class="eyebrow">Модель</span>
+              <div class="model-chip"><span class="engine-badge mono">V3</span><span><strong>Parakeet</strong><small>локальный движок</small></span></div>
+              <div class="load-meter"><i></i></div>
+              <div class="resource-line"><span>Загрузка CPU</span><span class="mono">32%</span></div>
+              <div class="resource-line"><span>Память</span><span class="mono">3,1 ГБ</span></div>
+            </section>
+            <section class="detail-section">
+              <span class="eyebrow">Сохранение</span>
+              <div class="path-box compact">
+                <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#folder"></use></svg>
+                <span class="mono" data-output-path>~/Documents/Transaudio</span>
+              </div>
+              <div class="detail-row"><span>Формат</span><strong>Markdown · .md</strong></div>
+              <button class="full-quiet-button" type="button" data-choose-folder>Открыть папку <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#external-link"></use></svg></button>
+            </section>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="export" aria-label="Экспорт">
+      <div class="files-console export-console">
+        <section class="panel export-panel">
+          <header class="panel-head intake-head">
+            <div>
+              <span class="eyebrow">Выход</span>
+              <h1>Экспорт расшифровок</h1>
+            </div>
+            <span class="badge is-done"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#check"></use></svg>4 из 4 готовы</span>
+          </header>
+          <div class="export-table-head">
+            <label class="check-all"><input type="checkbox" checked> Выбрать все</label>
+            <span class="mono">Формат: Markdown</span>
+          </div>
+          <div class="export-list">
+            <label class="export-row">
+              <input type="checkbox" checked>
+              <span class="fake-check"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#check"></use></svg></span>
+              <span class="file-type"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#file-text"></use></svg></span>
+              <span class="export-copy"><strong>Интервью с Анной Петровой</strong><span>интервью_анна_петрова.md · 28 КБ</span></span>
+              <span class="badge is-done">Готово</span>
+            </label>
+            <label class="export-row">
+              <input type="checkbox" checked>
+              <span class="fake-check"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#check"></use></svg></span>
+              <span class="file-type"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#file-text"></use></svg></span>
+              <span class="export-copy"><strong>Лекция 11. Компиляторы</strong><span>лекция_11_компиляторы.md · 54 КБ</span></span>
+              <span class="badge is-working">Сейчас</span>
+            </label>
+            <label class="export-row">
+              <input type="checkbox" checked>
+              <span class="fake-check"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#check"></use></svg></span>
+              <span class="file-type"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#file-text"></use></svg></span>
+              <span class="export-copy"><strong>Подкаст, выпуск 07</strong><span>подкаст_выпуск_07.md · ждёт файла</span></span>
+              <span class="badge">В очереди</span>
+            </label>
+            <label class="export-row">
+              <input type="checkbox" checked>
+              <span class="fake-check"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#check"></use></svg></span>
+              <span class="file-type"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#file-text"></use></svg></span>
+              <span class="export-copy"><strong>Планёрка 24 октября</strong><span>планёрка_24_октября.md · ждёт файла</span></span>
+              <span class="badge">В очереди</span>
+            </label>
+          </div>
+          <div class="export-footer-note"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#info"></use></svg><span>Файлы из очереди сохранятся автоматически, когда будут готовы. Исходники останутся на месте.</span></div>
+        </section>
+
+        <aside class="panel launch-panel export-settings-panel">
+          <header class="panel-head">
+            <div class="panel-title"><span class="panel-icon"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#file-down"></use></svg></span><h2>Параметры экспорта</h2></div>
+          </header>
+          <div class="launch-content">
+            <section class="setting-group">
+              <div class="setting-label"><span>Папка результатов</span><button class="link-button" type="button" data-choose-folder>Изменить</button></div>
+              <div class="path-box">
+                <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#folder"></use></svg>
+                <span class="mono" data-output-path>~/Documents/Transaudio</span>
+              </div>
+            </section>
+            <section class="setting-group">
+              <div class="setting-label"><span>Формат</span></div>
+              <div class="format-cards">
+                <label class="format-card is-selected"><input type="radio" name="export-format" checked><span class="format-mark mono">MD</span><span><strong>Markdown</strong><small>текст и таймкоды</small></span></label>
+                <label class="format-card"><input type="radio" name="export-format"><span class="format-mark mono">SRT</span><span><strong>Субтитры</strong><small>для монтажа</small></span></label>
+                <label class="format-card"><input type="radio" name="export-format"><span class="format-mark mono">TXT</span><span><strong>Только текст</strong><small>без разметки</small></span></label>
+              </div>
+            </section>
+            <section class="estimate-block">
+              <div class="estimate-line"><span>Выбрано</span><strong>4 файла</strong></div>
+              <div class="estimate-line"><span>Объём</span><strong>7,4 МБ</strong></div>
+              <div class="estimate-line"><span>Очередь</span><strong>2 из 4 готовы</strong></div>
+            </section>
+          </div>
+          <footer class="launch-footer">
+            <button class="primary-button" type="button" data-export>
+              <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#download"></use></svg>
+              Сохранить 4 файла
+            </button>
+            <p>Неготовые файлы сохранятся автоматически.</p>
+          </footer>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <footer class="statusbar" aria-label="Общий прогресс">
+    <div class="statusbar-file">
+      <span class="status-led"></span>
+      <div><span class="eyebrow">Сейчас · файл 2 из 4</span><strong>Лекция 11. Компиляторы</strong></div>
+    </div>
+    <div class="statusbar-progress">
+      <div class="statusbar-copy"><span>Общий прогресс</span><strong class="mono">41%</strong><span class="mono">осталось 1 ч 14 мин</span></div>
+      <div class="segmented-track small" role="progressbar" aria-label="Общий прогресс очереди" aria-valuemin="0" aria-valuemax="100" aria-valuenow="41"><i style="width:41%"></i></div>
+    </div>
+    <div class="statusbar-actions">
+      <span class="local-note"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#cpu"></use></svg>32% CPU</span>
+      <button class="status-button" type="button" data-pause aria-pressed="false">
+        <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#pause"></use></svg>
+        <span data-pause-label>Пауза</span>
+      </button>
+    </div>
+  </footer>
+</div>
+
+<div class="modal-backdrop" data-modal="welcome" hidden role="dialog" aria-modal="true" aria-labelledby="welcome-title">
+  <div class="modal welcome">
+    <div class="welcome-visual">
+      <div class="engine-orbit"><span class="engine-badge mono">V3</span></div>
+      <div class="visual-copy"><span class="eyebrow">Локальный движок</span><strong>Parakeet</strong><span class="mono">речь в текст · офлайн</span></div>
+      <div class="visual-waves" aria-hidden="true" data-waveform data-bars="46" data-progress="0"></div>
+    </div>
+    <p class="eyebrow">Первый запуск</p>
+    <h2 id="welcome-title">Скачаем модель один раз</h2>
+    <p class="modal-lead">Для транскрибации нужен локальный движок Parakeet V3. Он займёт 2,4 ГБ и будет запускаться вместе с приложением. Разрешение нужно только сейчас.</p>
+    <div class="permission-grid">
+      <div><span class="permission-icon"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#hard-drive-download"></use></svg></span><strong>2,4 ГБ</strong><span>на диске</span></div>
+      <div><span class="permission-icon"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#shield-check"></use></svg></span><strong>Один раз</strong><span>без повторных вопросов</span></div>
+      <div><span class="permission-icon"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#cpu"></use></svg></span><strong>Офлайн</strong><span>файлы не покидают ПК</span></div>
+    </div>
+    <div class="welcome-note"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#info"></use></svg><span>Загрузка начнётся сразу. Модель можно запускать без интернета после установки.</span></div>
+    <div class="modal-actions" data-permission-actions>
+      <button class="primary-button" type="button" data-permission>Разрешить и скачать</button>
+      <button class="secondary-button" type="button" data-close-modal>Не сейчас</button>
+    </div>
+    <div class="download-state" data-download-state hidden>
+      <div class="download-copy"><span>Загрузка Parakeet V3</span><span class="mono" data-download-label>0%</span></div>
+      <div class="segmented-track" data-download-bar><i></i></div>
+      <p class="help-text">Если закрыть приложение, загрузка продолжится при следующем запуске.</p>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" data-modal="settings" hidden role="dialog" aria-modal="true" aria-labelledby="settings-title">
+  <div class="modal settings">
+    <header class="modal-head">
+      <div><span class="eyebrow">Настройки</span><h2 id="settings-title">Приложение</h2></div>
+      <button class="head-icon" type="button" data-close-modal aria-label="Закрыть настройки"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#x"></use></svg></button>
+    </header>
+    <section class="settings-section">
+      <div class="setting-label"><span>Папка результатов</span><button class="link-button" type="button" data-choose-folder>Изменить</button></div>
+      <div class="path-box"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#folder"></use></svg><span class="mono">/Users/alex/Documents/Transaudio</span></div>
+      <p class="help-text">Сюда сохраняются расшифровки. Аудио и видео остаются там, где лежат.</p>
+    </section>
+    <section class="settings-section">
+      <div class="settings-row">
+        <span class="engine-badge mono">V3</span>
+        <div class="settings-copy"><strong>Parakeet V3</strong><span>Загружена · 2,4 ГБ · работает офлайн</span></div>
+        <span class="badge is-done"><svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#check"></use></svg>Готова</span>
+      </div>
+      <p class="help-text">Разрешение на загрузку получено при первом запуске. Приложение не спросит его снова и будет запускать модель автоматически.</p>
+      <div class="switch-row"><span>Запускать модель вместе с приложением</span><span class="switch is-on" aria-hidden="true"><i></i></span></div>
+    </section>
+    <footer class="modal-foot">
+      <button class="secondary-button" type="button" data-close-modal>Готово</button>
+      <button class="link-button" type="button" data-choose-folder>Открыть папку <svg class="icon" aria-hidden="true"><use href="assets/icons/lucide.svg#external-link"></use></svg></button>
+    </footer>
+  </div>
+</div>
+
+<script src="assets/base.js"></script>
+</body>
+</html>
