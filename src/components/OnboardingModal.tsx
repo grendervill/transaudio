@@ -92,7 +92,9 @@ export function OnboardingModal({
               {model.stage === "downloading"
                 ? model.total_bytes
                   ? `${formatBytes(model.downloaded_bytes ?? 0)} / ${formatBytes(model.total_bytes)}`
-                  : `${progress}%`
+                  : (model.downloaded_bytes ?? 0) > 0
+                    ? formatBytes(model.downloaded_bytes ?? 0)
+                    : "соединяемся…"
                 : "подготовка"}
             </span>
           </div>
@@ -117,6 +119,10 @@ export function OnboardingModal({
       {model.stage === "error" ? (
         <div className="model-error">
           <p>{model.error}</p>
+          <p className="model-error-hint">
+            Проверьте подключение к интернету и брандмауэр. Если ошибка повторяется,
+            пришлите файл transaudio.log из папки данных приложения.
+          </p>
           <div className="modal-actions">
             <button className="button button-accent" type="button" onClick={() => void onRetry()}>
               Повторить

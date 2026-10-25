@@ -4753,7 +4753,7 @@ dependencies = [
 
 [[package]]
 name = "transaudio"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "env_logger 0.11.11",
  "ffmpeg-sidecar",
@@ -4773,6 +4773,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tempfile",
  "thiserror 2.0.21",
+ "time",
  "transcribe-rs",
  "uuid",
 ]

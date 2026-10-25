@@ -2158,6 +2158,13 @@ p {
   margin-top: 13px;
 }
 
+.model-error-hint {
+  margin-top: 7px;
+  color: #c9a29a;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .modal.settings-modal {
   width: min(620px, calc(100vw - 48px));
   padding: 27px 30px;

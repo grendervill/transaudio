@@ -9,6 +9,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { Toast } from "./components/Toast";
 import { TranscriptionScreen } from "./components/TranscriptionScreen";
 import { Topbar } from "./components/Topbar";
+import { reconcileModelStatus } from "./lib/modelStatus";
 import type {
   Backend,
   Bootstrap,
@@ -60,7 +61,7 @@ export default function App({ backend }: AppProps) {
     const subscribe = async () => {
       cleanups.push(
         await backend.onModelStatus((status) => {
-          if (alive) setModel(status);
+          if (alive) setModel((current) => reconcileModelStatus(current, status));
         }),
       );
       cleanups.push(
@@ -76,11 +77,14 @@ export default function App({ backend }: AppProps) {
       const data = await backend.bootstrap();
       if (!alive) return;
       setBootstrap(data);
-      setModel(data.model);
+      setModel((current) =>
+        current ? reconcileModelStatus(current, data.model) : data.model,
+      );
       setQueue(data.queue);
       setSettings(data.settings);
       setOnboardingOpen(
-        data.model.stage === "consent_required" && !data.settings.model_consent,
+        data.model.stage === "error" ||
+          (data.model.stage === "consent_required" && !data.settings.model_consent),
       );
     };
 
@@ -96,6 +100,7 @@ export default function App({ backend }: AppProps) {
 
   useEffect(() => {
     if (model?.stage === "ready") setOnboardingOpen(false);
+    if (model?.stage === "error") setOnboardingOpen(true);
   }, [model?.stage]);
 
   const handlePause = useCallback(
@@ -193,24 +198,49 @@ export default function App({ backend }: AppProps) {
     }
   };
 
+  const markModelStarting = () => {
+    setModel((current) =>
+      current
+        ? {
+            ...current,
+            stage: "downloading",
+            progress: 0,
+            downloaded_bytes: 0,
+            total_bytes: null,
+            error: null,
+          }
+        : current,
+    );
+  };
+
   const allowModel = async () => {
+    markModelStarting();
     try {
       const status = await backend.grantConsent();
-      setModel(status);
+      setModel((current) => reconcileModelStatus(current, status));
       setSettings((current) =>
         current ? { ...current, model_consent: true } : current,
       );
     } catch (error) {
-      notify(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      setModel((current) =>
+        current ? { ...current, stage: "error", error: message, progress: 0 } : current,
+      );
+      notify(message);
     }
   };
 
   const retryModel = async () => {
+    markModelStarting();
     try {
       const status = await backend.downloadModel();
-      setModel(status);
+      setModel((current) => reconcileModelStatus(current, status));
     } catch (error) {
-      notify(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      setModel((current) =>
+        current ? { ...current, stage: "error", error: message, progress: 0 } : current,
+      );
+      notify(message);
     }
   };
 

@@ -80,3 +80,26 @@ npm run tauri build
 - `transcribe-rs` — MIT.
 - Lucide — ISC.
 - Шрифты — SIL Open Font License 1.1 (см. `public/fonts/README.md`).
+
+## Если модель не скачивается
+
+Начиная с версии 0.1.1 кнопка «Разрешить загрузку» сразу показывает состояние
+«соединяемся…», а при сбое — причину и кнопку «Повторить». Приложение не
+обращается к сторонним сервисам, кроме загрузки самой модели и FFmpeg.
+
+Что проверить на Windows и Linux:
+
+- интернет и доступ к `https://blob.handy.computer` (HTTPS, порт 443);
+- брандмауэр и антивирус: разрешите приложению исходящие соединения;
+- корпоративный прокси: задайте переменные `HTTPS_PROXY` и `HTTP_PROXY` перед
+  запуском приложения — загрузчик их учитывает;
+- при ошибке контрольной суммы удалите папку
+  `models/parakeet-v3-int8` в каталоге данных и повторите загрузку.
+
+Диагностический лог лежит рядом с настройками:
+
+- macOS: `~/Library/Application Support/com.transaudio.desktop/transaudio.log`
+- Windows: `%APPDATA%\com.transaudio.desktop\transaudio.log`
+- Linux: `~/.local/share/com.transaudio.desktop/transaudio.log`
+
+В логе есть точный URL, HTTP-статус и текст сетевой ошибки.

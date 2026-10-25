@@ -14,6 +14,7 @@ export interface ModelStatus {
   downloaded_bytes: number | null;
   total_bytes: number | null;
   error: string | null;
+  revision?: number;
 }
 
 export interface Settings {

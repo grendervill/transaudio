@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import App from "./App";
 import { createFakeBackend } from "./test/fakeBackend";
+import type { ModelStatus } from "./types";
 
 function renderApp() {
   return render(<App backend={createFakeBackend()} />);
@@ -85,4 +86,132 @@ describe("app shell", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("shows download progress immediately after permission, before the backend replies", async () => {
+    const user = userEvent.setup();
+    const grantConsent = vi.fn(
+      () => new Promise<ModelStatus>(() => {}),
+    );
+    render(
+      <App
+        backend={createFakeBackend({
+          bootstrap: async () => ({
+            settings: {
+              output_dir: "/tmp/out",
+              model_consent: false,
+              export_format: "md",
+            },
+            model: {
+              stage: "consent_required",
+              progress: 0,
+              downloaded_bytes: null,
+              total_bytes: null,
+              error: null,
+            },
+            queue: {
+              status: "idle",
+              overall_progress: 0,
+              current_id: null,
+              current_index: 0,
+              total: 0,
+              completed: 0,
+              failed: 0,
+            },
+          }),
+          grantConsent,
+        })}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Разрешить загрузку" }));
+
+    expect(
+      await screen.findByRole("progressbar", { name: "Загрузка модели" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Разрешить загрузку" }),
+    ).not.toBeInTheDocument();
+    expect(grantConsent).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a failed consent attempt visible with a retry action", async () => {
+    const user = userEvent.setup();
+    render(
+      <App
+        backend={createFakeBackend({
+          bootstrap: async () => ({
+            settings: {
+              output_dir: "/tmp/out",
+              model_consent: false,
+              export_format: "md",
+            },
+            model: {
+              stage: "consent_required",
+              progress: 0,
+              downloaded_bytes: null,
+              total_bytes: null,
+              error: null,
+            },
+            queue: {
+              status: "idle",
+              overall_progress: 0,
+              current_id: null,
+              current_index: 0,
+              total: 0,
+              completed: 0,
+              failed: 0,
+            },
+          }),
+          grantConsent: async () => {
+            throw new Error("Нет соединения с сервером");
+          },
+        })}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Разрешить загрузку" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Нет соединения с сервером")).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "Повторить" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole("button", { name: "Разрешить загрузку" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("opens the model error on startup when a previous download failed", async () => {
+    render(
+      <App
+        backend={createFakeBackend({
+          bootstrap: async () => ({
+            settings: {
+              output_dir: "/tmp/out",
+              model_consent: true,
+              export_format: "md",
+            },
+            model: {
+              stage: "error",
+              progress: 0,
+              downloaded_bytes: null,
+              total_bytes: null,
+              error: "Не удалось скачать модель",
+            },
+            queue: {
+              status: "idle",
+              overall_progress: 0,
+              current_id: null,
+              current_index: 0,
+              total: 0,
+              completed: 0,
+              failed: 0,
+            },
+          }),
+        })}
+      />,
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Не удалось скачать модель")).toBeInTheDocument();
+  });
 });

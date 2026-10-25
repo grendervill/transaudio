@@ -1,7 +1,8 @@
 use std::fs::{self, File};
 use std::io::{Read, Write};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Component, Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -12,6 +13,8 @@ use thiserror::Error;
 
 use transcribe_rs::onnx::parakeet::{ParakeetModel, ParakeetParams, TimestampGranularity};
 use transcribe_rs::onnx::Quantization;
+
+use crate::logging::log;
 
 pub const MODEL_ARCHIVE_URL: &str = "https://blob.handy.computer/parakeet-v3-int8.tar.gz";
 pub const MODEL_ARCHIVE_SHA256: &str =
@@ -42,6 +45,9 @@ pub struct ModelStatus {
     pub downloaded_bytes: Option<u64>,
     pub total_bytes: Option<u64>,
     pub error: Option<String>,
+    /// Monotonic revision assigned by the manager. The UI uses it to ignore
+    /// replies and events that arrive out of order.
+    pub revision: u64,
 }
 
 impl ModelStatus {
@@ -52,6 +58,7 @@ impl ModelStatus {
             downloaded_bytes: None,
             total_bytes: None,
             error: None,
+            revision: 0,
         }
     }
 
@@ -62,6 +69,7 @@ impl ModelStatus {
             downloaded_bytes: None,
             total_bytes: None,
             error: Some(message.into()),
+            revision: 0,
         }
     }
 }
@@ -219,6 +227,7 @@ pub struct ModelManager {
     sink: StatusSink,
     consent: AtomicBool,
     busy: AtomicBool,
+    revision: AtomicU64,
     loader: EngineLoader,
 }
 
@@ -243,6 +252,7 @@ impl ModelManager {
             sink,
             consent: AtomicBool::new(false),
             busy: AtomicBool::new(false),
+            revision: AtomicU64::new(0),
             loader,
         })
     }
@@ -266,35 +276,31 @@ impl ModelManager {
         let installed = is_model_installed(&self.paths.model_dir);
         match StartAction::for_state(installed, consent) {
             StartAction::LoadInstalled => {
-                self.set_status(ModelStatus::new(ModelStage::Loading));
+                log("model: found on disk, loading at startup");
                 self.spawn_load();
             }
             StartAction::Download => {
-                self.set_status(ModelStatus {
-                    stage: ModelStage::Downloading,
-                    progress: 0.0,
-                    downloaded_bytes: Some(0),
-                    total_bytes: None,
-                    error: None,
-                });
+                log("model: consent already stored, resuming download at startup");
                 self.spawn_download();
             }
-            StartAction::WaitForConsent | StartAction::AlreadyBusy => {}
+            StartAction::WaitForConsent => log("model: consent required before download"),
+            StartAction::AlreadyBusy => {}
         }
     }
 
     pub fn grant_and_download(self: &Arc<Self>) -> Result<(), ModelError> {
         self.consent.store(true, Ordering::SeqCst);
+        log("model: consent granted by user");
         if self.busy.load(Ordering::SeqCst) {
+            log("model: download already in progress");
             return Ok(());
         }
         if is_model_installed(&self.paths.model_dir) {
             self.spawn_load();
-            Ok(())
         } else {
             self.spawn_download();
-            Ok(())
         }
+        Ok(())
     }
 
     pub fn retry(self: &Arc<Self>) -> Result<(), ModelError> {
@@ -325,12 +331,11 @@ impl ModelManager {
         if self.busy.swap(true, Ordering::SeqCst) {
             return;
         }
+        self.set_status(ModelStatus::new(ModelStage::Loading));
         let manager = Arc::clone(self);
         std::thread::spawn(move || {
-            manager.set_status(ModelStatus::new(ModelStage::Loading));
-            let result = (manager.loader)(&manager.paths.model_dir);
-            match result {
-                Ok(engine) => {
+            match run_guarded(|| (manager.loader)(&manager.paths.model_dir)) {
+                Ok(Ok(engine)) => {
                     match manager.engine.lock() {
                         Ok(mut slot) => *slot = Some(engine),
                         Err(_) => {
@@ -343,23 +348,48 @@ impl ModelManager {
                     manager.set_status(status);
                     manager.busy.store(false, Ordering::SeqCst);
                 }
-                Err(error) => {
+                Ok(Err(error)) => {
                     manager.finish_error(format!("Не удалось запустить Parakeet V3: {error}"));
+                }
+                Err(panic) => {
+                    manager.finish_error(format!("Внутренняя ошибка запуска модели: {panic}"));
                 }
             }
         });
     }
 
-    fn spawn_download(self: &Arc<Self>) {
+    /// Marks the start of a download synchronously, before the worker thread
+    /// touches the network. The UI must never look inert while a request is
+    /// being established.
+    fn begin_download(&self) -> bool {
         if self.busy.swap(true, Ordering::SeqCst) {
+            return false;
+        }
+        self.set_status(ModelStatus {
+            stage: ModelStage::Downloading,
+            progress: 0.0,
+            downloaded_bytes: Some(0),
+            total_bytes: None,
+            error: None,
+            revision: 0,
+        });
+        true
+    }
+
+    fn spawn_download(self: &Arc<Self>) {
+        if !self.begin_download() {
             return;
         }
         let manager = Arc::clone(self);
-        std::thread::spawn(move || {
-            if let Err(error) = manager.download_and_install() {
-                manager.finish_error(error.to_string());
-            }
-        });
+        std::thread::spawn(
+            move || match run_guarded(|| manager.download_and_install()) {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => manager.finish_error(error.to_string()),
+                Err(panic) => {
+                    manager.finish_error(format!("Внутренняя ошибка загрузки модели: {panic}"));
+                }
+            },
+        );
     }
 
     fn download_and_install(&self) -> Result<(), ModelError> {
@@ -370,13 +400,19 @@ impl ModelManager {
             .tempdir_in(&self.paths.cache_dir)?;
         let archive_path = temp.path().join("parakeet-v3-int8.tar.gz");
 
-        let mut response = reqwest::blocking::Client::builder()
-            .timeout(Duration::from_secs(60 * 30))
-            .build()?
-            .get(MODEL_ARCHIVE_URL)
-            .send()?
-            .error_for_status()?;
+        let url = model_archive_url();
+        log(format!("download: GET {url}"));
+        let client = reqwest::blocking::Client::builder()
+            .connect_timeout(Duration::from_secs(15))
+            .timeout(Duration::from_secs(60 * 60))
+            .user_agent(concat!("Transaudio/", env!("CARGO_PKG_VERSION")))
+            .build()?;
+        let mut response = client.get(url).send()?.error_for_status()?;
         let total = response.content_length();
+        log(format!(
+            "download: HTTP {} content-length={total:?}",
+            response.status()
+        ));
 
         self.set_status(ModelStatus {
             stage: ModelStage::Downloading,
@@ -384,6 +420,7 @@ impl ModelManager {
             downloaded_bytes: Some(0),
             total_bytes: total,
             error: None,
+            revision: 0,
         });
 
         let mut file = File::create(&archive_path)?;
@@ -407,6 +444,7 @@ impl ModelManager {
                     downloaded_bytes: Some(downloaded),
                     total_bytes: total,
                     error: None,
+                    revision: 0,
                 });
                 last_emit = Instant::now();
             }
@@ -416,8 +454,10 @@ impl ModelManager {
 
         let digest = sha256_file(&archive_path)?;
         if digest != MODEL_ARCHIVE_SHA256 {
+            log(format!("download: checksum mismatch ({digest})"));
             return Err(ModelError::Checksum);
         }
+        log("download: checksum verified");
 
         self.set_status(ModelStatus {
             stage: ModelStage::Loading,
@@ -425,9 +465,11 @@ impl ModelManager {
             downloaded_bytes: Some(downloaded),
             total_bytes: total,
             error: None,
+            revision: 0,
         });
 
         install_archive(&archive_path, &self.paths.models_dir, |_, _| {})?;
+        log("download: model extracted");
         self.load_after_download()
     }
 
@@ -437,6 +479,7 @@ impl ModelManager {
             Ok(mut slot) => *slot = Some(engine),
             Err(_) => return Err(ModelError::Load("движок недоступен".into())),
         }
+        log("model: engine loaded after download");
         let mut status = ModelStatus::new(ModelStage::Ready);
         status.progress = 100.0;
         self.set_status(status);
@@ -445,6 +488,7 @@ impl ModelManager {
     }
 
     fn finish_error(&self, message: String) {
+        log(format!("model: error: {message}"));
         if let Ok(mut slot) = self.engine.lock() {
             slot.take();
         }
@@ -452,11 +496,52 @@ impl ModelManager {
         self.busy.store(false, Ordering::SeqCst);
     }
 
-    fn set_status(&self, status: ModelStatus) {
+    fn set_status(&self, mut status: ModelStatus) {
+        status.revision = self.revision.fetch_add(1, Ordering::SeqCst) + 1;
+        let changed = self
+            .status
+            .lock()
+            .map(|current| current.stage != status.stage)
+            .unwrap_or(true);
+        if changed {
+            match &status.error {
+                Some(error) => log(format!("model: {:?} ({error})", status.stage)),
+                None => log(format!("model: {:?}", status.stage)),
+            }
+        }
         if let Ok(mut current) = self.status.lock() {
             *current = status.clone();
         }
         (self.sink)(status);
+    }
+}
+
+/// Development-only override used to exercise the failure path. Release
+/// builds always download from the pinned source.
+fn model_archive_url() -> String {
+    #[cfg(debug_assertions)]
+    {
+        if let Ok(url) = std::env::var("TRANSAUDIO_MODEL_URL") {
+            return url;
+        }
+    }
+    MODEL_ARCHIVE_URL.to_string()
+}
+
+fn run_guarded<T>(f: impl FnOnce() -> T) -> Result<T, String> {
+    match catch_unwind(AssertUnwindSafe(f)) {
+        Ok(value) => Ok(value),
+        Err(payload) => Err(panic_message(payload)),
+    }
+}
+
+fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        (*message).to_string()
+    } else if let Some(message) = payload.downcast_ref::<String>() {
+        message.clone()
+    } else {
+        "неизвестная ошибка".into()
     }
 }
 
@@ -525,8 +610,8 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        initial_stage, install_archive, is_model_installed, sha256_file, ModelManager, ModelPaths,
-        ModelStage, ModelStatus, StartAction, EXPECTED_FILES,
+        initial_stage, install_archive, is_model_installed, run_guarded, sha256_file, ModelError,
+        ModelManager, ModelPaths, ModelStage, ModelStatus, StartAction, EXPECTED_FILES,
     };
 
     fn create_model_archive(path: &Path, complete: bool) {
@@ -641,5 +726,47 @@ mod tests {
 
         assert_eq!(manager.status().stage, ModelStage::ConsentRequired);
         assert_eq!(manager.status().progress, 0.0);
+    }
+    #[test]
+    fn begin_download_publishes_progress_before_any_network_work() {
+        let temp = TempDir::new().unwrap();
+        let paths = ModelPaths::new(temp.path().to_path_buf());
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = {
+            let seen = std::sync::Arc::clone(&seen);
+            std::sync::Arc::new(move |status: ModelStatus| {
+                seen.lock().unwrap().push(status);
+            })
+        };
+        let loader =
+            std::sync::Arc::new(|_: &Path| -> Result<Box<dyn super::SpeechEngine>, String> {
+                Err("loader must not run".into())
+            });
+        let manager = ModelManager::with_loader(paths, sink, loader);
+
+        assert!(manager.begin_download());
+        let status = manager.status();
+        assert_eq!(status.stage, ModelStage::Downloading);
+        assert_eq!(status.progress, 0.0);
+        assert_eq!(status.downloaded_bytes, Some(0));
+        assert!(status.error.is_none());
+        assert_eq!(
+            seen.lock().unwrap().last().unwrap().stage,
+            ModelStage::Downloading
+        );
+
+        assert!(!manager.begin_download(), "second attempt must not restart");
+    }
+
+    #[test]
+    fn guarded_run_turns_panics_into_visible_errors() {
+        let result = run_guarded(|| -> Result<(), ModelError> { panic!("boom in worker") });
+        let message = result.expect_err("panic must not escape silently");
+        assert!(message.contains("boom in worker"));
+    }
+
+    #[test]
+    fn guarded_run_returns_normal_results() {
+        assert_eq!(run_guarded(|| 7).unwrap(), 7);
     }
 }

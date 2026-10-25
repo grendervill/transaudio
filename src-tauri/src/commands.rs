@@ -29,22 +29,35 @@ pub fn get_model_status(state: State<'_, AppState>) -> crate::model::ModelStatus
 pub fn grant_model_consent(
     state: State<'_, AppState>,
 ) -> Result<crate::model::ModelStatus, String> {
+    crate::logging::log("command: grant_model_consent");
     {
         let mut store = state.settings.lock().map_err(|_| "Настройки недоступны")?;
-        store
-            .set_model_consent(true)
-            .map_err(|error| error.to_string())?;
+        if let Err(error) = store.set_model_consent(true) {
+            crate::logging::log(format!("command: consent was not saved: {error}"));
+            return Err(error.to_string());
+        }
     }
-    state
-        .model
-        .grant_and_download()
-        .map_err(|error| error.to_string())?;
+    state.model.grant_and_download().map_err(|error| {
+        crate::logging::log(format!("command: grant failed: {error}"));
+        error.to_string()
+    })?;
     Ok(state.model.status())
 }
 
 #[tauri::command]
 pub fn download_model(state: State<'_, AppState>) -> Result<crate::model::ModelStatus, String> {
-    state.model.retry().map_err(|error| error.to_string())?;
+    crate::logging::log("command: download_model (explicit retry)");
+    {
+        let mut store = state.settings.lock().map_err(|_| "Настройки недоступны")?;
+        if let Err(error) = store.set_model_consent(true) {
+            crate::logging::log(format!("command: consent was not saved: {error}"));
+            return Err(error.to_string());
+        }
+    }
+    state.model.grant_and_download().map_err(|error| {
+        crate::logging::log(format!("command: retry failed: {error}"));
+        error.to_string()
+    })?;
     Ok(state.model.status())
 }
 
