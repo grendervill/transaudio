@@ -1,8 +1,10 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::config::ExportFormat;
 use crate::model::EngineSegment;
+use crate::transcribe::CompletedTranscript;
 
 pub fn srt_timestamp(seconds: f64) -> String {
     let total_ms = (seconds.max(0.0) * 1000.0).round() as u64;
@@ -110,7 +112,12 @@ fn render_txt(segments: &[EngineSegment]) -> String {
 pub fn safe_stem(name: &str) -> String {
     let mut sanitized = String::with_capacity(name.len());
     for character in name.trim().chars() {
-        if character.is_control() || matches!(character, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') {
+        if character.is_control()
+            || matches!(
+                character,
+                '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*'
+            )
+        {
             sanitized.push('_');
         } else {
             sanitized.push(character);
@@ -124,14 +131,62 @@ pub fn safe_stem(name: &str) -> String {
     let upper = result.to_uppercase();
     let reserved = matches!(
         upper.as_str(),
-        "CON" | "PRN" | "AUX" | "NUL"
-            | "COM1" | "COM2" | "COM3" | "COM4" | "COM5" | "COM6" | "COM7" | "COM8" | "COM9"
-            | "LPT1" | "LPT2" | "LPT3" | "LPT4" | "LPT5" | "LPT6" | "LPT7" | "LPT8" | "LPT9"
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
     );
     if reserved {
         result.push('_');
     }
     result
+}
+
+pub fn export_completed(
+    results: &HashMap<String, CompletedTranscript>,
+    output_dir: &Path,
+    ids: &[String],
+    format: ExportFormat,
+) -> Result<Vec<PathBuf>, String> {
+    if ids.is_empty() {
+        return Err("Выберите хотя бы одну расшифровку".into());
+    }
+    let mut written = Vec::with_capacity(ids.len());
+    for id in ids {
+        let transcript = results
+            .get(id)
+            .ok_or_else(|| format!("Расшифровка {id} не найдена"))?;
+        let stem = Path::new(&transcript.name)
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .unwrap_or(&transcript.name);
+        written.push(write_result(
+            output_dir,
+            stem,
+            format,
+            &transcript.segments,
+            transcript.duration_secs,
+        )?);
+    }
+    Ok(written)
 }
 
 pub fn write_result(
@@ -160,7 +215,9 @@ mod tests {
     use crate::config::ExportFormat;
     use crate::model::EngineSegment;
 
-    use super::{format_duration, render, safe_stem, srt_timestamp, write_result};
+    use super::{
+        export_completed, format_duration, render, safe_stem, srt_timestamp, write_result,
+    };
 
     fn segments() -> Vec<EngineSegment> {
         vec![
@@ -240,5 +297,57 @@ mod tests {
         assert_eq!(path.file_name().unwrap(), "Лекция 11.srt");
         let content = fs::read_to_string(path).unwrap();
         assert!(content.contains("00:00:03,000"));
+    }
+    #[test]
+    fn exports_selected_completed_results() {
+        use crate::transcribe::CompletedTranscript;
+        use std::collections::HashMap;
+
+        let temp = TempDir::new().unwrap();
+        let mut results = HashMap::new();
+        results.insert(
+            "a".to_string(),
+            CompletedTranscript {
+                id: "a".into(),
+                name: "Интервью.mp3".into(),
+                source_path: "/tmp/Интервью.mp3".into(),
+                segments: segments(),
+                duration_secs: 12.0,
+                saved_path: temp.path().join("Интервью.md").to_string_lossy().into(),
+            },
+        );
+        results.insert(
+            "b".to_string(),
+            CompletedTranscript {
+                id: "b".into(),
+                name: "Лекция.mp4".into(),
+                source_path: "/tmp/Лекция.mp4".into(),
+                segments: segments(),
+                duration_secs: 12.0,
+                saved_path: temp.path().join("Лекция.md").to_string_lossy().into(),
+            },
+        );
+
+        let written =
+            export_completed(&results, temp.path(), &["b".into()], ExportFormat::Srt).unwrap();
+
+        assert_eq!(written.len(), 1);
+        assert_eq!(written[0].file_name().unwrap(), "Лекция.srt");
+        assert!(!temp.path().join("Интервью.srt").exists());
+    }
+
+    #[test]
+    fn rejects_unknown_result_id_during_export() {
+        use std::collections::HashMap;
+        let temp = TempDir::new().unwrap();
+        let results = HashMap::new();
+        let error = export_completed(
+            &results,
+            temp.path(),
+            &["missing".into()],
+            ExportFormat::Txt,
+        )
+        .unwrap_err();
+        assert!(error.contains("не найдена"));
     }
 }

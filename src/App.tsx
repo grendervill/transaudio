@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { FilesScreen } from "./components/FilesScreen";
+import { ExportScreen } from "./components/ExportScreen";
 import { GlobalBar } from "./components/GlobalBar";
 import { Rail } from "./components/Rail";
 import { Toast } from "./components/Toast";
@@ -14,6 +15,7 @@ import type {
   QueueFile,
   QueueState,
   Settings,
+  ExportFormat,
   Screen,
 } from "./types";
 
@@ -177,6 +179,24 @@ export default function App({ backend }: AppProps) {
     }
   };
 
+  const exportResults = async (ids: string[], format: ExportFormat) => {
+    try {
+      const result = await backend.exportResults(ids, format);
+      notify(`Сохранено файлов: ${result.files_written.length}.`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error));
+      throw error;
+    }
+  };
+
+  const openOutputDir = async () => {
+    try {
+      await backend.openOutputDir();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const start = async () => {
     if (!files.length) return;
     try {
@@ -239,13 +259,14 @@ export default function App({ backend }: AppProps) {
             />
           )}
           {screen === "export" && (
-            <section className="screen" aria-label="Экспорт">
-              <div className="screen-placeholder">
-                <p className="kicker">Выход</p>
-                <h1>Экспорт</h1>
-                <p className="lead">Сохранение расшифровок в выбранную папку.</p>
-              </div>
-            </section>
+            <ExportScreen
+              completed={files.filter((file) => file.status === "completed")}
+              outputDir={settings.output_dir}
+              initialFormat={settings.export_format}
+              onChooseFolder={chooseFolder}
+              onOpenFolder={openOutputDir}
+              onExport={exportResults}
+            />
           )}
         </main>
         <GlobalBar queue={queue} files={files} model={model} onPause={handlePause} />

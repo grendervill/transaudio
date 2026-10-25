@@ -124,3 +124,47 @@ pub fn set_paused(
 pub fn get_queue_state(state: State<'_, AppState>) -> crate::transcribe::QueueState {
     state.queue.state()
 }
+
+#[derive(serde::Serialize)]
+pub struct ExportResult {
+    pub files_written: Vec<String>,
+}
+
+#[tauri::command]
+pub fn export_results(
+    ids: Vec<String>,
+    format: crate::config::ExportFormat,
+    state: State<'_, AppState>,
+) -> Result<ExportResult, String> {
+    let output_dir = state
+        .settings
+        .lock()
+        .map_err(|_| "Настройки недоступны")?
+        .settings()
+        .output_dir
+        .clone();
+    let results = state
+        .queue
+        .results
+        .lock()
+        .map_err(|_| "Расшифровки недоступны")?;
+    let written = crate::export::export_completed(&results, &output_dir, &ids, format)?;
+    Ok(ExportResult {
+        files_written: written
+            .into_iter()
+            .map(|path| path.to_string_lossy().to_string())
+            .collect(),
+    })
+}
+
+#[tauri::command]
+pub fn open_output_dir(state: State<'_, AppState>) -> Result<(), String> {
+    let output_dir = state
+        .settings
+        .lock()
+        .map_err(|_| "Настройки недоступны")?
+        .settings()
+        .output_dir
+        .clone();
+    tauri_plugin_opener::open_path(&output_dir, None::<&str>).map_err(|error| error.to_string())
+}

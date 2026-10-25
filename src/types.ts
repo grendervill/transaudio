@@ -99,6 +99,10 @@ export type DragDropEvent =
   | { type: "drop"; paths: string[] }
   | { type: "leave"; paths?: undefined };
 
+export interface ExportResult {
+  files_written: string[];
+}
+
 export interface Backend {
   bootstrap(): Promise<Bootstrap>;
   inspectFiles(paths: string[]): Promise<InspectFilesResult>;
@@ -107,6 +111,8 @@ export interface Backend {
   grantConsent(): Promise<ModelStatus>;
   downloadModel(): Promise<ModelStatus>;
   setOutputDir(path: string): Promise<Settings>;
+  exportResults(ids: string[], format: ExportFormat): Promise<ExportResult>;
+  openOutputDir(): Promise<void>;
   pickFiles(): Promise<string[]>;
   pickOutputDir(): Promise<string | null>;
   onModelStatus(callback: (status: ModelStatus) => void): Promise<() => void>;

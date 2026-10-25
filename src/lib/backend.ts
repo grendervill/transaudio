@@ -7,6 +7,8 @@ import type {
   Backend,
   Bootstrap,
   DragDropEvent,
+  ExportFormat,
+  ExportResult,
   FileJob,
   FileUpdate,
   InspectFilesResult,
@@ -40,6 +42,9 @@ export function createTauriBackend(): Backend {
     grantConsent: () => invoke<ModelStatus>("grant_model_consent"),
     downloadModel: () => invoke<ModelStatus>("download_model"),
     setOutputDir: (path) => invoke<Settings>("set_output_dir", { path }),
+    exportResults: (ids, format) =>
+      invoke<ExportResult>("export_results", { ids, format }),
+    openOutputDir: () => invoke<void>("open_output_dir"),
     async pickFiles() {
       const selected = await open({
         multiple: true,

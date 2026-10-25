@@ -31,7 +31,11 @@ impl AudioEngine {
     }
 
     fn cached_ffmpeg(&self) -> PathBuf {
-        self.bin_dir.join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" })
+        self.bin_dir.join(if cfg!(windows) {
+            "ffmpeg.exe"
+        } else {
+            "ffmpeg"
+        })
     }
 
     fn system_ffmpeg() -> Option<PathBuf> {
@@ -72,9 +76,8 @@ impl AudioEngine {
             .map_err(|error| format!("Не удалось создать папку для FFmpeg: {error}"))?;
         let url = ffmpeg_sidecar::download::ffmpeg_download_url()
             .map_err(|error| format!("Не удалось определить сборку FFmpeg: {error}"))?;
-        let archive =
-            ffmpeg_sidecar::download::download_ffmpeg_package(&url, &self.bin_dir)
-                .map_err(|error| format!("Не удалось скачать FFmpeg: {error}"))?;
+        let archive = ffmpeg_sidecar::download::download_ffmpeg_package(&url, &self.bin_dir)
+            .map_err(|error| format!("Не удалось скачать FFmpeg: {error}"))?;
         ffmpeg_sidecar::download::unpack_ffmpeg_without_extras(&archive, &self.bin_dir)
             .map_err(|error| format!("Не удалось распаковать FFmpeg: {error}"))?;
         let _ = std::fs::remove_file(archive);
@@ -282,7 +285,11 @@ mod tests {
         let temp = tempfile::TempDir::new().unwrap();
         let engine = AudioEngine::new(temp.path().join("bin"));
         std::fs::create_dir_all(engine.bin_dir()).unwrap();
-        let cached = engine.bin_dir().join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" });
+        let cached = engine.bin_dir().join(if cfg!(windows) {
+            "ffmpeg.exe"
+        } else {
+            "ffmpeg"
+        });
         std::fs::write(&cached, b"binary").unwrap();
 
         assert_eq!(engine.locate_ffmpeg(), Some(cached));
@@ -342,5 +349,4 @@ mod tests {
         assert_eq!(spec.bits_per_sample, 16);
         assert!(!read_wav_samples(&output).unwrap().is_empty());
     }
-
 }

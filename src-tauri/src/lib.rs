@@ -62,7 +62,9 @@ pub fn run() {
             commands::bootstrap,
             commands::start_transcription,
             commands::set_paused,
-            commands::get_queue_state
+            commands::get_queue_state,
+            commands::export_results,
+            commands::open_output_dir
         ])
         .run(tauri::generate_context!())
         .expect("error while running Transaudio");
