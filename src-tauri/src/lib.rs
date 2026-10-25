@@ -4,9 +4,11 @@ use std::sync::Arc;
 
 use tauri::{Emitter, Manager};
 
+use crate::audio::AudioEngine;
 use crate::config::SettingsStore;
 use crate::model::{ModelManager, ModelPaths, StatusSink};
 use crate::state::{AppPaths, AppState};
+use crate::transcribe::QueueRuntime;
 
 pub mod audio;
 pub mod commands;
@@ -44,7 +46,10 @@ pub fn run() {
             let model = ModelManager::new(model_paths, sink);
             model.start_on_launch(settings.settings().model_consent);
 
-            app.manage(AppState::new(settings, paths, model));
+            let audio = Arc::new(AudioEngine::new(paths.bin.clone()));
+            let queue = Arc::new(QueueRuntime::default());
+
+            app.manage(AppState::new(settings, paths, model, audio, queue));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -53,7 +58,11 @@ pub fn run() {
             commands::set_output_dir,
             commands::get_model_status,
             commands::grant_model_consent,
-            commands::download_model
+            commands::download_model,
+            commands::bootstrap,
+            commands::start_transcription,
+            commands::set_paused,
+            commands::get_queue_state
         ])
         .run(tauri::generate_context!())
         .expect("error while running Transaudio");

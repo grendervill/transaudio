@@ -1,8 +1,10 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use crate::audio::AudioEngine;
 use crate::config::SettingsStore;
 use crate::model::ModelManager;
+use crate::transcribe::QueueRuntime;
 
 #[derive(Debug, Clone)]
 pub struct AppPaths {
@@ -27,6 +29,8 @@ pub struct AppState {
     pub settings: Mutex<SettingsStore>,
     pub paths: AppPaths,
     pub model: std::sync::Arc<ModelManager>,
+    pub audio: std::sync::Arc<AudioEngine>,
+    pub queue: std::sync::Arc<QueueRuntime>,
 }
 
 impl AppState {
@@ -34,11 +38,15 @@ impl AppState {
         settings: SettingsStore,
         paths: AppPaths,
         model: std::sync::Arc<ModelManager>,
+        audio: std::sync::Arc<AudioEngine>,
+        queue: std::sync::Arc<QueueRuntime>,
     ) -> Self {
         Self {
             settings: Mutex::new(settings),
             paths,
             model,
+            audio,
+            queue,
         }
     }
 }

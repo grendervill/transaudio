@@ -152,14 +152,14 @@ pub enum ModelError {
 
 pub type StatusSink = Arc<dyn Fn(ModelStatus) + Send + Sync>;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EngineSegment {
     pub start: f64,
     pub end: f64,
     pub text: String,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EngineResult {
     pub text: String,
     pub segments: Vec<EngineSegment>,
@@ -228,7 +228,8 @@ impl ModelManager {
             paths,
             sink,
             Arc::new(|model_dir| {
-                ParakeetEngine::load(model_dir).map(|engine| Box::new(engine) as Box<dyn SpeechEngine>)
+                ParakeetEngine::load(model_dir)
+                    .map(|engine| Box::new(engine) as Box<dyn SpeechEngine>)
             }),
         )
     }
