@@ -98,4 +98,4 @@ npm run tauri build
 
 ## GitHub Actions
 
-Workflow `.github/workflows/build.yml` проверяет `npm test`, `cargo test` и Tauri-сборку без подписи на macOS, Windows и Ubuntu. Секреты для подписи в него не входят.
+Workflow `.github/workflows/build.yml` собирает пять нативных целей: macOS Apple Silicon, Linux x64, Linux ARM64, Windows x64 и Windows ARM64. Для каждой цели запускаются `npm test`, `cargo test` и Tauri-сборка без подписи. Секреты для подписи в него не входят.
