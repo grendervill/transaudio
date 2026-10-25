@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use crate::config::SettingsStore;
+use crate::model::ModelManager;
 
 #[derive(Debug, Clone)]
 pub struct AppPaths {
@@ -25,13 +26,19 @@ impl AppPaths {
 pub struct AppState {
     pub settings: Mutex<SettingsStore>,
     pub paths: AppPaths,
+    pub model: std::sync::Arc<ModelManager>,
 }
 
 impl AppState {
-    pub fn new(settings: SettingsStore, paths: AppPaths) -> Self {
+    pub fn new(
+        settings: SettingsStore,
+        paths: AppPaths,
+        model: std::sync::Arc<ModelManager>,
+    ) -> Self {
         Self {
             settings: Mutex::new(settings),
             paths,
+            model,
         }
     }
 }
