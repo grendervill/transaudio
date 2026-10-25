@@ -31,11 +31,11 @@ jobs:
           - name: windows-x64
             os: windows-latest
             target: x86_64-pc-windows-msvc
-            bundles: nsis,msi
+            bundles: nsis
           - name: windows-arm64
             os: windows-11-arm
             target: aarch64-pc-windows-msvc
-            bundles: nsis,msi
+            bundles: nsis
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -67,11 +67,6 @@ jobs:
       - name: Rust tests
         shell: bash
         run: cargo test --manifest-path src-tauri/Cargo.toml
-      - name: Clear cached WiX sources
-        if: runner.os == 'Windows'
-        shell: bash
-        run: find src-tauri/target -type d -path '*/release/wix' -prune -exec rm -rf {} + || true
-
       - name: Build application and installers
         shell: bash
         env:
