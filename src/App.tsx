@@ -1,21 +1,263 @@
-export default function App() {
+import { useCallback, useEffect, useState } from "react";
+
+import { FilesScreen } from "./components/FilesScreen";
+import { GlobalBar } from "./components/GlobalBar";
+import { Rail } from "./components/Rail";
+import { Toast } from "./components/Toast";
+import { Topbar } from "./components/Topbar";
+import type {
+  Backend,
+  Bootstrap,
+  FileUpdate,
+  ModelStatus,
+  QueueFile,
+  QueueState,
+  Settings,
+  Screen,
+} from "./types";
+
+interface AppProps {
+  backend: Backend;
+}
+
+function mergeFileUpdate(files: QueueFile[], update: FileUpdate): QueueFile[] {
+  return files.map((file) => {
+    if (file.id !== update.id) return file;
+    return {
+      ...file,
+      status: update.status,
+      progress: update.progress,
+      duration_secs: update.duration_secs ?? file.duration_secs,
+      processed_secs: update.processed_secs ?? file.processed_secs,
+      segments: update.new_segments ? [...file.segments, ...update.new_segments] : file.segments,
+      saved_path: update.saved_path ?? file.saved_path,
+      error: update.error ?? file.error,
+    };
+  });
+}
+
+export default function App({ backend }: AppProps) {
+  const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
+  const [screen, setScreen] = useState<Screen>("files");
+  const [files, setFiles] = useState<QueueFile[]>([]);
+  const [model, setModel] = useState<ModelStatus | null>(null);
+  const [queue, setQueue] = useState<QueueState | null>(null);
+  const [bootError, setBootError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    const cleanups: Array<() => void> = [];
+
+    const subscribe = async () => {
+      cleanups.push(
+        await backend.onModelStatus((status) => {
+          if (alive) setModel(status);
+        }),
+      );
+      cleanups.push(
+        await backend.onFileUpdate((update) => {
+          if (alive) setFiles((current) => mergeFileUpdate(current, update));
+        }),
+      );
+      cleanups.push(
+        await backend.onQueueState((state) => {
+          if (alive) setQueue(state);
+        }),
+      );
+      const data = await backend.bootstrap();
+      if (!alive) return;
+      setBootstrap(data);
+      setModel(data.model);
+      setQueue(data.queue);
+      setSettings(data.settings);
+    };
+
+    subscribe().catch((error: unknown) => {
+      if (alive) setBootError(error instanceof Error ? error.message : String(error));
+    });
+
+    return () => {
+      alive = false;
+      cleanups.forEach((cleanup) => cleanup());
+    };
+  }, [backend]);
+
+  const handlePause = useCallback(
+    async (paused: boolean) => {
+      try {
+        const state = await backend.setPaused(paused);
+        setQueue(state);
+      } catch (error) {
+        console.error(error);
+      }
+    },
+    [backend],
+  );
+
+  if (bootError) {
+    return (
+      <div className="boot-screen">
+        <div className="boot-mark is-error">!</div>
+        <h1>Не удалось запустить приложение</h1>
+        <p>{bootError}</p>
+      </div>
+    );
+  }
+
+  if (!bootstrap || !model || !queue || !settings) {
+    return (
+      <div className="boot-screen">
+        <div className="boot-mark">
+          <svg className="icon" aria-hidden="true">
+            <use href="/icons/lucide.svg#audio-waveform" />
+          </svg>
+        </div>
+        <p className="kicker">Transaudio</p>
+        <h1>Запускаем локальный движок</h1>
+        <p>Parakeet V3 остаётся на этом компьютере.</p>
+      </div>
+    );
+  }
+
+  const notify = (message: string) => setToast(message);
+
+  const addPaths = async (paths: string[]) => {
+    if (queue.status === "running" || queue.status === "paused") {
+      notify("Дождитесь завершения текущей очереди.");
+      return;
+    }
+    try {
+      const result = await backend.inspectFiles(paths);
+      const accepted = result.files.filter(
+        (candidate) => !files.some((file) => file.path === candidate.path),
+      );
+      if (accepted.length) {
+        setFiles((current) => [
+          ...current,
+          ...accepted.map<QueueFile>((file) => ({
+            ...file,
+            status: "queued",
+            progress: 0,
+            processed_secs: null,
+            duration_secs: null,
+            segments: [],
+            saved_path: null,
+            error: null,
+          })),
+        ]);
+      }
+      if (result.rejected.length) {
+        const first = result.rejected[0];
+        notify(
+          result.rejected.length === 1
+            ? `${first.path}: ${first.reason}`
+            : `${result.rejected.length} файла не добавлены. ${first.reason}`,
+        );
+      } else if (accepted.length === 0 && result.files.length > 0) {
+        notify("Эти файлы уже есть в очереди.");
+      }
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const chooseFolder = async () => {
+    try {
+      const selected = await backend.pickOutputDir();
+      if (!selected) return;
+      const updated = await backend.setOutputDir(selected);
+      setSettings(updated);
+      notify(`Папка результатов: ${updated.output_dir}`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const start = async () => {
+    if (!files.length) return;
+    try {
+      setFiles((current) =>
+        current.map((file) => ({
+          ...file,
+          status: "queued",
+          progress: 0,
+          processed_secs: null,
+          segments: [],
+          saved_path: null,
+          error: null,
+        })),
+      );
+      const state = await backend.startTranscription(
+        files.map((file) => ({ id: file.id, path: file.path, name: file.name })),
+      );
+      setQueue(state);
+      setScreen("transcribe");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   return (
     <div className="app">
-      <aside className="rail">
-        <span className="brand-mark" aria-hidden="true">
-          <svg className="icon">
-            <use href="/icons/lucide.svg#audio-lines" />
-          </svg>
-        </span>
-        <nav aria-label="Основная навигация">
-          <button type="button">Файлы</button>
-          <button type="button">Транскрипция</button>
-          <button type="button">Экспорт</button>
-        </nav>
-      </aside>
-      <main className="app-main">
-        <h1>Transaudio</h1>
-      </main>
+      <Rail screen={screen} model={model} onNavigate={setScreen} />
+      <div className="shell">
+        <Topbar
+          fileCount={files.length}
+          model={model}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+        <main className="content">
+          {screen === "files" && (
+            <FilesScreen
+              backend={backend}
+              files={files}
+              model={model}
+              outputDir={settings.output_dir}
+              queueStatus={queue.status}
+              onAddPaths={addPaths}
+              onRemoveFile={(id) =>
+                setFiles((current) => current.filter((file) => file.id !== id))
+              }
+              onStart={start}
+              onChooseFolder={chooseFolder}
+              onOpenSettings={() => setSettingsOpen(true)}
+              onNotify={notify}
+            />
+          )}
+          {screen === "transcribe" && (
+            <section className="screen" aria-label="Транскрипция">
+              <div className="screen-placeholder">
+                <p className="kicker">Чтение</p>
+                <h1>Транскрипция</h1>
+                <p className="lead">Здесь появится текст расшифровки.</p>
+              </div>
+            </section>
+          )}
+          {screen === "export" && (
+            <section className="screen" aria-label="Экспорт">
+              <div className="screen-placeholder">
+                <p className="kicker">Выход</p>
+                <h1>Экспорт</h1>
+                <p className="lead">Сохранение расшифровок в выбранную папку.</p>
+              </div>
+            </section>
+          )}
+        </main>
+        <GlobalBar queue={queue} files={files} model={model} onPause={handlePause} />
+      </div>
+      {settingsOpen ? (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal" role="dialog" aria-modal="true" aria-label="Настройки">
+            <button type="button" className="icon-button" onClick={() => setSettingsOpen(false)}>
+              Закрыть
+            </button>
+          </div>
+        </div>
+      ) : null}
+      <Toast message={toast} onDone={() => setToast(null)} />
     </div>
   );
 }
