@@ -1,3 +1,5 @@
+use std::fs::File;
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
@@ -76,11 +78,32 @@ impl AudioEngine {
             .map_err(|error| format!("Не удалось создать папку для FFmpeg: {error}"))?;
         let url = ffmpeg_sidecar::download::ffmpeg_download_url()
             .map_err(|error| format!("Не удалось определить сборку FFmpeg: {error}"))?;
-        let archive = ffmpeg_sidecar::download::download_ffmpeg_package(url, &self.bin_dir)
+        let archive_name = url
+            .split('/')
+            .next_back()
+            .unwrap_or("ffmpeg-download")
+            .split('?')
+            .next()
+            .unwrap_or("ffmpeg-download");
+        let archive_path = self.bin_dir.join(archive_name);
+        let client = reqwest::blocking::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(20))
+            .timeout(std::time::Duration::from_secs(30 * 60))
+            .build()
+            .map_err(|error| format!("Не удалось подготовить загрузку FFmpeg: {error}"))?;
+        let mut response = client
+            .get(url)
+            .send()
+            .and_then(reqwest::blocking::Response::error_for_status)
             .map_err(|error| format!("Не удалось скачать FFmpeg: {error}"))?;
-        ffmpeg_sidecar::download::unpack_ffmpeg_without_extras(&archive, &self.bin_dir)
+        let mut file = std::fs::File::create(&archive_path)
+            .map_err(|error| format!("Не удалось создать файл FFmpeg: {error}"))?;
+        std::io::copy(&mut response, &mut file)
+            .map_err(|error| format!("Не удалось сохранить архив FFmpeg: {error}"))?;
+        drop(file);
+        ffmpeg_sidecar::download::unpack_ffmpeg_without_extras(&archive_path, &self.bin_dir)
             .map_err(|error| format!("Не удалось распаковать FFmpeg: {error}"))?;
-        let _ = std::fs::remove_file(archive);
+        let _ = std::fs::remove_file(archive_path);
 
         let binary = self.cached_ffmpeg();
         if !binary.is_file() {
@@ -165,6 +188,122 @@ pub struct RejectedFile {
 pub struct InspectFilesResult {
     pub files: Vec<InspectedFile>,
     pub rejected: Vec<RejectedFile>,
+}
+
+pub const SAMPLE_RATE: usize = 16_000;
+pub const TARGET_CHUNK_SECS: f32 = 30.0;
+pub const SEARCH_WINDOW_SECS: f32 = 3.0;
+const FRAME_SECS: f32 = 0.03;
+
+#[derive(Debug, Clone)]
+pub struct WavChunk {
+    pub start_sample: usize,
+    pub end_sample: usize,
+    pub samples: Vec<f32>,
+}
+
+pub struct WavChunker {
+    reader: hound::WavReader<BufReader<File>>,
+    buffer: Vec<f32>,
+    start_sample: usize,
+    total_samples: usize,
+}
+
+impl WavChunker {
+    pub fn open(path: &Path) -> Result<Self, String> {
+        let reader = hound::WavReader::open(path)
+            .map_err(|error| format!("Не удалось открыть WAV: {error}"))?;
+        let spec = reader.spec();
+        if spec.channels != 1
+            || spec.sample_rate != SAMPLE_RATE as u32
+            || spec.bits_per_sample != 16
+            || spec.sample_format != hound::SampleFormat::Int
+        {
+            return Err("Ожидается WAV 16 кГц, mono, 16-bit PCM".into());
+        }
+        let total_samples = reader.duration() as usize;
+        Ok(Self {
+            reader,
+            buffer: Vec::new(),
+            start_sample: 0,
+            total_samples,
+        })
+    }
+
+    pub fn duration_secs(&self) -> f64 {
+        self.total_samples as f64 / SAMPLE_RATE as f64
+    }
+
+    pub fn total_samples(&self) -> usize {
+        self.total_samples
+    }
+
+    pub fn next_chunk(&mut self) -> Result<Option<WavChunk>, String> {
+        if self.start_sample >= self.total_samples {
+            return Ok(None);
+        }
+
+        let target = (TARGET_CHUNK_SECS * SAMPLE_RATE as f32) as usize;
+        let search = (SEARCH_WINDOW_SECS * SAMPLE_RATE as f32) as usize;
+        let frame = (FRAME_SECS * SAMPLE_RATE as f32) as usize;
+        let remaining = self.total_samples - self.start_sample;
+        let desired = remaining.min(target + search);
+        self.fill_to(desired)?;
+
+        if self.buffer.is_empty() {
+            return Ok(None);
+        }
+
+        let split = if remaining > target + search {
+            choose_split_point(&self.buffer, target, search, frame)
+        } else {
+            self.buffer.len()
+        };
+        let start_sample = self.start_sample;
+        let samples: Vec<f32> = self.buffer.drain(..split).collect();
+        self.start_sample += split;
+        Ok(Some(WavChunk {
+            start_sample,
+            end_sample: self.start_sample,
+            samples,
+        }))
+    }
+
+    fn fill_to(&mut self, desired: usize) -> Result<(), String> {
+        let needed = desired.saturating_sub(self.buffer.len());
+        if needed == 0 {
+            return Ok(());
+        }
+        let mut iterator = self.reader.samples::<i16>();
+        for _ in 0..needed {
+            match iterator.next() {
+                Some(Ok(sample)) => self.buffer.push(sample as f32 / i16::MAX as f32),
+                Some(Err(error)) => return Err(format!("Ошибка чтения WAV: {error}")),
+                None => break,
+            }
+        }
+        Ok(())
+    }
+}
+
+fn choose_split_point(buffer: &[f32], target: usize, search: usize, frame: usize) -> usize {
+    let low = target.saturating_sub(search);
+    let high = (target + search).min(buffer.len());
+    let mut best = target.min(buffer.len());
+    let mut best_energy = f32::MAX;
+    let mut offset = low;
+    while offset + frame <= high {
+        let energy = buffer[offset..offset + frame]
+            .iter()
+            .map(|sample| sample * sample)
+            .sum::<f32>();
+        if energy < best_energy {
+            best_energy = energy;
+            best = offset + frame;
+        }
+        offset += frame;
+    }
+    best
 }
 
 pub fn inspect_file(path: &Path) -> Result<InspectedFile, String> {
@@ -348,5 +487,77 @@ mod tests {
         assert_eq!(spec.channels, 1);
         assert_eq!(spec.bits_per_sample, 16);
         assert!(!read_wav_samples(&output).unwrap().is_empty());
+    }
+    fn write_test_wav(path: &Path, seconds: u32, mut sample_at: impl FnMut(usize) -> i16) {
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 16_000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut writer = hound::WavWriter::create(path, spec).unwrap();
+        for index in 0..(16_000 * seconds as usize) {
+            writer.write_sample(sample_at(index)).unwrap();
+        }
+        writer.finalize().unwrap();
+    }
+
+    #[test]
+    fn streams_long_wav_in_bounded_contiguous_chunks() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let path = temp.path().join("long.wav");
+        write_test_wav(&path, 65, |_| 3000);
+
+        let mut chunker = WavChunker::open(&path).unwrap();
+        assert!((chunker.duration_secs() - 65.0).abs() < 0.01);
+
+        let mut chunks = Vec::new();
+        while let Some(chunk) = chunker.next_chunk().unwrap() {
+            assert!(chunk.samples.len() <= 33 * 16_000);
+            chunks.push(chunk);
+        }
+
+        assert!(chunks.len() >= 2);
+        assert_eq!(chunks[0].start_sample, 0);
+        assert_eq!(chunks.last().unwrap().end_sample, 65 * 16_000);
+        for pair in chunks.windows(2) {
+            assert_eq!(pair[0].end_sample, pair[1].start_sample);
+        }
+        for chunk in &chunks[..chunks.len() - 1] {
+            let secs = (chunk.end_sample - chunk.start_sample) as f32 / 16_000.0;
+            assert!((27.0..=33.0).contains(&secs), "bad chunk duration {secs}");
+        }
+    }
+
+    #[test]
+    fn stream_prefers_quiet_split_point() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let path = temp.path().join("quiet.wav");
+        write_test_wav(&path, 40, |index| {
+            let secs = index as f32 / 16_000.0;
+            if (29.0..29.3).contains(&secs) {
+                1
+            } else {
+                7000
+            }
+        });
+
+        let mut chunker = WavChunker::open(&path).unwrap();
+        let first = chunker.next_chunk().unwrap().unwrap();
+        let split_secs = first.end_sample as f32 / 16_000.0;
+        assert!((28.8..=30.2).contains(&split_secs), "split at {split_secs}");
+    }
+
+    #[test]
+    fn stream_returns_short_audio_in_one_chunk() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let path = temp.path().join("short.wav");
+        write_test_wav(&path, 9, |index| if index % 2 == 0 { 1000 } else { -1000 });
+
+        let mut chunker = WavChunker::open(&path).unwrap();
+        let first = chunker.next_chunk().unwrap().unwrap();
+        assert_eq!(first.start_sample, 0);
+        assert_eq!(first.end_sample, 9 * 16_000);
+        assert!(chunker.next_chunk().unwrap().is_none());
     }
 }

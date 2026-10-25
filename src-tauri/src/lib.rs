@@ -25,8 +25,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let app_data = app.path().app_data_dir()?;
-            let documents = app.path().document_dir()?;
             fs::create_dir_all(&app_data)?;
+            let documents = app
+                .path()
+                .document_dir()
+                .unwrap_or_else(|_| app_data.join("Documents"));
 
             let paths = AppPaths::new(app_data.clone());
             fs::create_dir_all(&paths.models)?;

@@ -172,12 +172,21 @@ function CompletedFile({
       </button>
       {open ? (
         <div className="completed-body">
-          <div className="completed-tools">
-            <button className="text-button" type="button" onClick={() => onCopy(text)}>
-              <Icon name="copy" /> Скопировать
-            </button>
-          </div>
-          <SegmentList segments={file.segments} live={false} />
+          {file.status === "error" && file.error ? (
+            <div className="file-error-block" role="alert">
+              <Icon name="triangle-alert" />
+              <span>{file.error}</span>
+            </div>
+          ) : (
+            <>
+              <div className="completed-tools">
+                <button className="text-button" type="button" onClick={() => onCopy(text)}>
+                  <Icon name="copy" /> Скопировать
+                </button>
+              </div>
+              <SegmentList segments={file.segments} live={false} />
+            </>
+          )}
         </div>
       ) : null}
     </article>

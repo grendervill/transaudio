@@ -13,6 +13,7 @@ interface FilesScreenProps {
   onAddPaths: (paths: string[]) => void;
   onRemoveFile: (id: string) => void;
   onStart: () => void;
+  onClear: () => void;
   onChooseFolder: () => void;
   onOpenSettings: () => void;
   onNotify?: (message: string) => void;
@@ -51,14 +52,17 @@ export function FilesScreen({
   onAddPaths,
   onRemoveFile,
   onStart,
+  onClear,
   onChooseFolder,
   onOpenSettings,
   onNotify,
 }: FilesScreenProps) {
   const [dragging, setDragging] = useState(false);
   const busy = queueStatus === "running" || queueStatus === "paused";
+  const stopped = queueStatus === "error";
+  const done = queueStatus === "done" || stopped;
   const canStart =
-    files.length > 0 && model.stage === "ready" && !busy;
+    files.length > 0 && model.stage === "ready" && !busy && !done;
   const totalBytes = files.reduce((sum, file) => sum + file.size_bytes, 0);
   const knownDurations = files.reduce((sum, file) => sum + (file.duration_secs ?? 0), 0);
   const latest = useRef({ busy, onAddPaths, onNotify });
@@ -187,6 +191,9 @@ export function FilesScreen({
                           : ""}
                         {formatBytes(file.size_bytes)}
                       </span>
+                      {file.error ? (
+                        <span className="file-error-message">{file.error}</span>
+                      ) : null}
                     </span>
                     <span className={`file-status status-${file.status}`}>
                       <StateDot status={file.status} />
@@ -213,15 +220,26 @@ export function FilesScreen({
                     ? `${formatBytes(totalBytes)}${knownDurations ? ` · ${formatDuration(knownDurations)}` : ""}`
                     : "Добавьте файлы, чтобы начать"}
               </span>
-              <button
-                className="button button-accent button-start"
-                type="button"
-                onClick={onStart}
-                disabled={!canStart}
-              >
-                <Icon name="play" />
-                Начать
-              </button>
+              <div className="start-actions">
+                {files.length > 0 && !busy ? (
+                  <button className="text-button clear-button" type="button" onClick={onClear}>
+                    Очистить
+                  </button>
+                ) : null}
+                <button
+                  className="button button-accent button-start"
+                  type="button"
+                  onClick={onStart}
+                  disabled={!canStart}
+                >
+                  <Icon name={done ? "check" : "play"} />
+                  {stopped
+                    ? "Очередь остановлена"
+                    : done
+                      ? "Транскрибация завершена"
+                      : "Начать"}
+                </button>
+              </div>
             </div>
           </section>
         </div>

@@ -10,7 +10,9 @@ interface GlobalBarProps {
 }
 
 function titleFor(queue: QueueState, files: QueueFile[]): string {
+  if (queue.message) return queue.message;
   if (queue.status === "idle") return "Очередь готова";
+  if (queue.status === "error") return "Очередь остановлена";
   if (queue.status === "done") {
     return queue.failed > 0 ? `Готово с ошибками · ${queue.failed}` : "Все записи готовы";
   }
@@ -32,13 +34,17 @@ export function GlobalBar({ queue, files, model, onPause }: GlobalBarProps) {
         <span className={`live-dot ${queue.status}`} />
         <div className="global-titles">
           <span className="global-kicker mono">
-            {queue.status === "idle"
-              ? "Сейчас"
-              : queue.status === "done"
-                ? "Итог"
-                : queue.current_id
-                  ? `Сейчас · файл ${Math.min(queue.current_index + 1, queue.total)} из ${queue.total}`
-                  : "Сейчас"}
+            {queue.status === "error"
+              ? "Ошибка очереди"
+              : queue.message
+                ? "Подготовка"
+                : queue.status === "idle"
+                  ? "Сейчас"
+                  : queue.status === "done"
+                    ? "Итог"
+                    : queue.current_id
+                      ? `Сейчас · файл ${Math.min(queue.current_index + 1, queue.total)} из ${queue.total}`
+                      : "Сейчас"}
           </span>
           <strong>{titleFor(queue, files)}</strong>
         </div>

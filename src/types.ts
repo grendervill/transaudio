@@ -22,7 +22,7 @@ export interface Settings {
   export_format: ExportFormat;
 }
 
-export type QueueStatus = "idle" | "running" | "paused" | "done";
+export type QueueStatus = "idle" | "running" | "paused" | "done" | "error";
 
 export interface QueueState {
   status: QueueStatus;
@@ -32,6 +32,7 @@ export interface QueueState {
   total: number;
   completed: number;
   failed: number;
+  message?: string | null;
 }
 
 export interface Bootstrap {

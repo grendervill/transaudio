@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
+use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
 use crate::config::ExportFormat;
@@ -112,6 +113,9 @@ fn render_txt(segments: &[EngineSegment]) -> String {
 pub fn safe_stem(name: &str) -> String {
     let mut sanitized = String::with_capacity(name.len());
     for character in name.trim().chars() {
+        if is_format_control(character) {
+            continue;
+        }
         if character.is_control()
             || matches!(
                 character,
@@ -124,7 +128,13 @@ pub fn safe_stem(name: &str) -> String {
         }
     }
     let trimmed = sanitized.trim_matches(|character| character == '.' || character == ' ');
-    let mut result: String = trimmed.chars().take(100).collect();
+    let mut result = String::new();
+    for character in trimmed.chars().take(100) {
+        if result.len() + character.len_utf8() > 120 {
+            break;
+        }
+        result.push(character);
+    }
     if result.is_empty() {
         result = "transcript".into();
     }
@@ -199,11 +209,44 @@ pub fn write_result(
     fs::create_dir_all(output_dir)
         .map_err(|error| format!("Не удалось создать папку результатов: {error}"))?;
     let stem = safe_stem(name);
-    let path = output_dir.join(format!("{stem}.{}", format.extension()));
     let content = render(format, name, segments, duration_secs);
-    fs::write(&path, content)
-        .map_err(|error| format!("Не удалось сохранить расшифровку: {error}"))?;
-    Ok(path)
+    let mut attempt = 0_u32;
+    loop {
+        let filename = if attempt == 0 {
+            format!("{stem}.{}", format.extension())
+        } else {
+            format!("{stem} ({}).{}", attempt + 1, format.extension())
+        };
+        let path = output_dir.join(filename);
+        let mut temporary = tempfile::NamedTempFile::new_in(output_dir)
+            .map_err(|error| format!("Не удалось создать временный файл: {error}"))?;
+        temporary
+            .write_all(content.as_bytes())
+            .map_err(|error| format!("Не удалось записать расшифровку: {error}"))?;
+        temporary
+            .as_file_mut()
+            .sync_all()
+            .map_err(|error| format!("Не удалось сохранить расшифровку: {error}"))?;
+        match temporary.persist_noclobber(&path) {
+            Ok(_) => return Ok(path),
+            Err(error) if error.error.kind() == ErrorKind::AlreadyExists => {
+                attempt = attempt.saturating_add(1);
+                if attempt > 10_000 {
+                    return Err("Слишком много файлов с одинаковым именем".into());
+                }
+            }
+            Err(error) => {
+                return Err(format!("Не удалось сохранить расшифровку: {}", error.error));
+            }
+        }
+    }
+}
+
+fn is_format_control(character: char) -> bool {
+    matches!(
+        character as u32,
+        0x200B..=0x200F | 0x202A..=0x202E | 0x2060..=0x206F | 0xFEFF
+    )
 }
 
 #[cfg(test)]
@@ -280,7 +323,8 @@ mod tests {
         assert_eq!(safe_stem(""), "transcript");
         assert_eq!(safe_stem("нормальное имя"), "нормальное имя");
         let long = safe_stem(&"я".repeat(130));
-        assert_eq!(long.chars().count(), 100);
+        assert!(long.chars().count() <= 100);
+        assert!(long.len() <= 120);
     }
 
     #[test]
@@ -349,5 +393,25 @@ mod tests {
         )
         .unwrap_err();
         assert!(error.contains("не найдена"));
+    }
+    #[test]
+    fn never_overwrites_an_existing_transcript() {
+        let temp = TempDir::new().unwrap();
+        let first =
+            write_result(temp.path(), "Выпуск", ExportFormat::Md, &segments(), 12.0).unwrap();
+        let second =
+            write_result(temp.path(), "Выпуск", ExportFormat::Md, &segments(), 12.0).unwrap();
+
+        assert_ne!(first, second);
+        assert!(first.is_file());
+        assert!(second.is_file());
+        assert_eq!(second.file_name().unwrap(), "Выпуск (2).md");
+    }
+
+    #[test]
+    fn limits_sanitized_names_by_utf8_bytes() {
+        let name = safe_stem(&"😀".repeat(100));
+        assert!(name.len() <= 120);
+        assert!(!name.is_empty());
     }
 }

@@ -46,6 +46,7 @@ function renderScreen(overrides: Partial<ComponentProps<typeof FilesScreen>> = {
     onAddPaths: vi.fn(),
     onRemoveFile: vi.fn(),
     onStart: vi.fn(),
+    onClear: vi.fn(),
     onChooseFolder: vi.fn(),
     onOpenSettings: vi.fn(),
     ...overrides,
@@ -117,6 +118,7 @@ describe("FilesScreen", () => {
       onAddPaths: vi.fn(),
       onRemoveFile: vi.fn(),
       onStart: vi.fn(),
+      onClear: vi.fn(),
       onChooseFolder: vi.fn(),
       onOpenSettings: vi.fn(),
       onNotify: vi.fn(),
@@ -127,6 +129,39 @@ describe("FilesScreen", () => {
     rerender(<FilesScreen {...props} onNotify={vi.fn()} />);
 
     await waitFor(() => expect(onDragDrop).toHaveBeenCalledTimes(1));
+  });
+
+  it("does not offer a second run over finished transcripts", async () => {
+    const user = userEvent.setup();
+    const onClear = vi.fn();
+    renderScreen({ files: [file], queueStatus: "done", onClear });
+
+    expect(
+      screen.getByRole("button", { name: "Транскрибация завершена" }),
+    ).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Очистить" }));
+    expect(onClear).toHaveBeenCalled();
+  });
+
+  it("shows the actual file error instead of only a status label", () => {
+    renderScreen({
+      files: [
+        {
+          ...file,
+          status: "error",
+          error: "FFmpeg не смог извлечь аудио",
+        },
+      ],
+    });
+    expect(screen.getByText("FFmpeg не смог извлечь аудио")).toBeInTheDocument();
+  });
+
+  it("shows a stopped queue and allows clearing it", () => {
+    renderScreen({ files: [file], queueStatus: "error" });
+    expect(
+      screen.getByRole("button", { name: "Очередь остановлена" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Очистить" })).toBeEnabled();
   });
 
 });

@@ -178,6 +178,10 @@ export default function App({ backend }: AppProps) {
   };
 
   const chooseFolder = async () => {
+    if (queue.status === "running" || queue.status === "paused") {
+      notify("Нельзя менять папку, пока идёт обработка очереди.");
+      return;
+    }
     try {
       const selected = await backend.pickOutputDir();
       if (!selected) return;
@@ -231,6 +235,9 @@ export default function App({ backend }: AppProps) {
   const start = async () => {
     if (!files.length) return;
     try {
+      const state = await backend.startTranscription(
+        files.map((file) => ({ id: file.id, path: file.path, name: file.name })),
+      );
       setFiles((current) =>
         current.map((file) => ({
           ...file,
@@ -242,14 +249,25 @@ export default function App({ backend }: AppProps) {
           error: null,
         })),
       );
-      const state = await backend.startTranscription(
-        files.map((file) => ({ id: file.id, path: file.path, name: file.name })),
-      );
       setQueue(state);
       setScreen("transcribe");
     } catch (error) {
       notify(error instanceof Error ? error.message : String(error));
     }
+  };
+
+  const clearFiles = () => {
+    setFiles([]);
+    setQueue({
+      status: "idle",
+      overall_progress: 0,
+      current_id: null,
+      current_index: 0,
+      total: 0,
+      completed: 0,
+      failed: 0,
+      message: null,
+    });
   };
 
   return (
@@ -279,6 +297,7 @@ export default function App({ backend }: AppProps) {
                 setFiles((current) => current.filter((file) => file.id !== id))
               }
               onStart={start}
+              onClear={clearFiles}
               onChooseFolder={chooseFolder}
               onOpenSettings={() => setSettingsOpen(true)}
               onNotify={notify}

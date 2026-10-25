@@ -60,8 +60,7 @@ impl SettingsStore {
                 export_format: ExportFormat::default(),
             });
 
-        ensure_output_dir(&settings.output_dir)?;
-
+        let _ = ensure_output_dir(&settings.output_dir);
         let store = Self {
             path: config_path.to_path_buf(),
             settings,
@@ -149,14 +148,38 @@ mod tests {
     }
 
     #[test]
-    fn rejects_output_path_that_is_a_file() {
+    fn rejects_output_path_that_is_a_file_when_changing_it() {
         let temp = TempDir::new().unwrap();
         let config_path = temp.path().join("settings.json");
         let file_path = temp.path().join("not-a-folder");
         fs::write(&file_path, b"x").unwrap();
+        let mut store =
+            SettingsStore::load_or_default(&config_path, temp.path().join("out")).unwrap();
 
-        let error = SettingsStore::load_or_default(&config_path, file_path).unwrap_err();
+        let error = store.set_output_dir(file_path).unwrap_err();
         assert!(error.to_string().contains("не является папкой"));
+    }
+
+    #[test]
+    fn loads_when_saved_output_folder_is_unavailable() {
+        let temp = TempDir::new().unwrap();
+        let config_path = temp.path().join("settings.json");
+        let unavailable = temp.path().join("gone").join("Transaudio");
+        fs::write(
+            &config_path,
+            format!(
+                r#"{{"output_dir":"{}","model_consent":true,"export_format":"md"}}"#,
+                unavailable.to_string_lossy().replace('\\', "\\\\")
+            ),
+        )
+        .unwrap();
+        // Make the path invalid (a file at the parent position).
+        fs::write(temp.path().join("gone"), b"x").unwrap();
+
+        let store = SettingsStore::load_or_default(&config_path, temp.path().join("fallback"))
+            .expect("app must be able to start with a stale output folder");
+        assert_eq!(store.settings().output_dir, unavailable);
+        assert!(store.settings().model_consent);
     }
 
     #[test]

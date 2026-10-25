@@ -7,15 +7,10 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
-use crate::audio::{read_wav_samples, AudioEngine};
+use crate::audio::{AudioEngine, WavChunker, SAMPLE_RATE};
 use crate::config::ExportFormat;
 use crate::export;
 use crate::model::{EngineSegment, ModelManager};
-
-pub const SAMPLE_RATE: usize = 16_000;
-pub const TARGET_CHUNK_SECS: f32 = 30.0;
-pub const SEARCH_WINDOW_SECS: f32 = 3.0;
-const FRAME_SECS: f32 = 0.03;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -24,6 +19,7 @@ pub enum QueueStatus {
     Running,
     Paused,
     Done,
+    Error,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -35,6 +31,7 @@ pub struct QueueState {
     pub total: usize,
     pub completed: usize,
     pub failed: usize,
+    pub message: Option<String>,
 }
 
 impl Default for QueueState {
@@ -47,6 +44,7 @@ impl Default for QueueState {
             total: 0,
             completed: 0,
             failed: 0,
+            message: None,
         }
     }
 }
@@ -114,6 +112,7 @@ impl QueueController {
             total,
             completed: 0,
             failed: 0,
+            message: None,
         };
         Ok(())
     }
@@ -169,6 +168,16 @@ impl QueueController {
             (false, QueueStatus::Paused) => self.state.status = QueueStatus::Running,
             _ => {}
         }
+    }
+
+    pub fn set_message(&mut self, message: Option<String>) {
+        self.state.message = message;
+    }
+
+    pub fn stop_with_error(&mut self, message: impl Into<String>) {
+        self.state.status = QueueStatus::Error;
+        self.state.message = Some(message.into());
+        self.state.current_id = None;
     }
 
     pub fn state(&self) -> QueueState {
@@ -242,6 +251,20 @@ impl QueueRuntime {
         }
     }
 
+    pub fn set_message(&self, message: Option<String>) -> QueueState {
+        let mut controller = self.controller.lock().expect("queue controller poisoned");
+        controller.set_message(message);
+        controller.state()
+    }
+
+    pub fn stop_with_error(&self, message: impl Into<String>) -> QueueState {
+        self.running.store(false, Ordering::SeqCst);
+        self.pause.store(false, Ordering::SeqCst);
+        let mut controller = self.controller.lock().expect("queue controller poisoned");
+        controller.stop_with_error(message);
+        controller.state()
+    }
+
     pub fn complete_file(&self) -> QueueState {
         let mut controller = self.controller.lock().expect("queue controller poisoned");
         controller.complete_file();
@@ -267,42 +290,6 @@ impl QueueRuntime {
         }
         state
     }
-}
-
-pub fn split_chunks(samples: &[f32]) -> Vec<(usize, usize)> {
-    if samples.is_empty() {
-        return Vec::new();
-    }
-
-    let target = (TARGET_CHUNK_SECS * SAMPLE_RATE as f32) as usize;
-    let search = (SEARCH_WINDOW_SECS * SAMPLE_RATE as f32) as usize;
-    let frame = (FRAME_SECS * SAMPLE_RATE as f32) as usize;
-    let mut chunks = Vec::new();
-    let mut start = 0_usize;
-
-    while samples.len() - start > target + search {
-        let low = start + target - search;
-        let high = start + target + search;
-        let mut best = start + target;
-        let mut best_energy = f32::MAX;
-        let mut offset = low;
-        while offset + frame <= high {
-            let energy = samples[offset..offset + frame]
-                .iter()
-                .map(|sample| sample * sample)
-                .sum::<f32>();
-            if energy < best_energy {
-                best_energy = energy;
-                best = offset + frame;
-            }
-            offset += frame;
-        }
-        chunks.push((start, best));
-        start = best;
-    }
-
-    chunks.push((start, samples.len()));
-    chunks
 }
 
 fn emit_queue(app: &AppHandle, state: &QueueState) {
@@ -356,6 +343,11 @@ fn wait_for_resume(
     );
 }
 
+enum FileFailure {
+    File(String),
+    Fatal(String),
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn run_batch(
     app: AppHandle,
@@ -366,6 +358,17 @@ pub fn run_batch(
     jobs: Vec<FileJob>,
     runtime: Arc<QueueRuntime>,
 ) {
+    emit_queue(
+        &app,
+        &runtime.set_message(Some("Подготовка аудиодвижка…".into())),
+    );
+    if let Err(error) = audio.ensure_ffmpeg() {
+        let state = runtime.stop_with_error(format!("Не удалось подготовить FFmpeg: {error}"));
+        emit_queue(&app, &state);
+        return;
+    }
+    emit_queue(&app, &runtime.set_message(None));
+
     for (index, job) in jobs.iter().enumerate() {
         wait_for_resume(&runtime, &app, &job.id, 0.0, None, None);
         if let Ok(mut controller) = runtime.controller.lock() {
@@ -407,7 +410,7 @@ pub fn run_batch(
                 );
                 emit_queue(&app, &state);
             }
-            Err(error) => {
+            Err(FileFailure::File(error)) => {
                 let state = runtime.fail_file();
                 emit_file(
                     &app,
@@ -424,6 +427,25 @@ pub fn run_batch(
                 );
                 emit_queue(&app, &state);
             }
+            Err(FileFailure::Fatal(error)) => {
+                runtime.fail_file();
+                emit_file(
+                    &app,
+                    &FileUpdate {
+                        id: job.id.clone(),
+                        status: FileStatus::Error,
+                        progress: 0.0,
+                        processed_secs: None,
+                        duration_secs: None,
+                        new_segments: None,
+                        saved_path: None,
+                        error: Some(error.clone()),
+                    },
+                );
+                let state = runtime.stop_with_error(error);
+                emit_queue(&app, &state);
+                return;
+            }
         }
     }
 
@@ -439,19 +461,23 @@ fn transcribe_file(
     cache_dir: &Path,
     output_dir: &Path,
     job: &FileJob,
-) -> Result<CompletedTranscript, String> {
+) -> Result<CompletedTranscript, FileFailure> {
     let temp = tempfile::Builder::new()
         .prefix("transaudio-")
         .tempdir_in(cache_dir)
-        .map_err(|error| format!("Не удалось создать временную папку: {error}"))?;
+        .map_err(|error| {
+            FileFailure::File(format!("Не удалось создать временную папку: {error}"))
+        })?;
     let wav_path = temp.path().join("audio.wav");
-    audio.extract_wav(Path::new(&job.path), &wav_path)?;
-    let samples = read_wav_samples(&wav_path)?;
-    if samples.is_empty() {
-        return Err("В файле нет аудиодорожки".into());
+    audio
+        .extract_wav(Path::new(&job.path), &wav_path)
+        .map_err(FileFailure::File)?;
+    let mut chunker = WavChunker::open(&wav_path).map_err(FileFailure::File)?;
+    let total_samples = chunker.total_samples();
+    if total_samples == 0 {
+        return Err(FileFailure::File("В файле нет аудиодорожки".into()));
     }
-    let duration_secs = samples.len() as f64 / SAMPLE_RATE as f64;
-    let chunks = split_chunks(&samples);
+    let duration_secs = chunker.duration_secs();
     runtime.set_progress(5.0);
     emit_queue(app, &runtime.state());
     emit_file(
@@ -471,7 +497,7 @@ fn transcribe_file(
     let mut all_segments = Vec::new();
     let mut last_progress = 5.0_f32;
     let mut last_processed = 0.0_f64;
-    for (start, end) in chunks {
+    while let Some(chunk) = chunker.next_chunk().map_err(FileFailure::File)? {
         wait_for_resume(
             runtime,
             app,
@@ -480,9 +506,10 @@ fn transcribe_file(
             Some(duration_secs),
             Some(last_processed),
         );
-        let chunk = &samples[start..end];
-        let result = model.transcribe(chunk).map_err(|error| error.to_string())?;
-        let offset = start as f64 / SAMPLE_RATE as f64;
+        let result = model
+            .transcribe(&chunk.samples)
+            .map_err(|error| FileFailure::Fatal(error.to_string()))?;
+        let offset = chunk.start_sample as f64 / SAMPLE_RATE as f64;
         let mut new_segments = Vec::new();
         for mut segment in result.segments {
             segment.start = (segment.start + offset).max(0.0);
@@ -494,14 +521,15 @@ fn transcribe_file(
         if !result.text.trim().is_empty() && new_segments.is_empty() {
             new_segments.push(EngineSegment {
                 start: offset,
-                end: end as f64 / SAMPLE_RATE as f64,
+                end: chunk.end_sample as f64 / SAMPLE_RATE as f64,
                 text: result.text,
             });
         }
         all_segments.extend(new_segments.iter().cloned());
-        let progress = (5.0 + 94.0 * (end as f64 / samples.len() as f64)).min(99.0) as f32;
+        let progress =
+            (5.0 + 94.0 * (chunk.end_sample as f64 / total_samples as f64)).min(99.0) as f32;
         last_progress = progress;
-        last_processed = end as f64 / SAMPLE_RATE as f64;
+        last_processed = chunk.end_sample as f64 / SAMPLE_RATE as f64;
         runtime.set_progress(progress);
         emit_queue(app, &runtime.state());
         emit_file(
@@ -510,7 +538,7 @@ fn transcribe_file(
                 id: job.id.clone(),
                 status: FileStatus::Processing,
                 progress,
-                processed_secs: Some(end as f64 / SAMPLE_RATE as f64),
+                processed_secs: Some(last_processed),
                 duration_secs: Some(duration_secs),
                 new_segments: Some(new_segments),
                 saved_path: None,
@@ -520,7 +548,7 @@ fn transcribe_file(
     }
 
     if all_segments.is_empty() {
-        return Err("Речь не распознана".into());
+        return Err(FileFailure::File("Речь не распознана".into()));
     }
 
     let source_stem = Path::new(&job.name)
@@ -533,7 +561,8 @@ fn transcribe_file(
         ExportFormat::Md,
         &all_segments,
         duration_secs,
-    )?
+    )
+    .map_err(FileFailure::File)?
     .to_string_lossy()
     .to_string();
 
@@ -551,61 +580,6 @@ fn transcribe_file(
 mod tests {
     use super::*;
 
-    fn chunk_secs(chunk: (usize, usize)) -> f32 {
-        (chunk.1 - chunk.0) as f32 / SAMPLE_RATE as f32
-    }
-
-    #[test]
-    fn short_audio_stays_one_chunk() {
-        let samples = vec![0.1; SAMPLE_RATE * 12];
-        assert_eq!(split_chunks(&samples), vec![(0, samples.len())]);
-    }
-
-    #[test]
-    fn empty_audio_has_no_chunks() {
-        assert!(split_chunks(&[]).is_empty());
-    }
-
-    #[test]
-    fn long_audio_is_contiguous_and_bounded() {
-        let samples = vec![0.2; SAMPLE_RATE * 65];
-        let chunks = split_chunks(&samples);
-
-        assert!(chunks.len() >= 2);
-        assert_eq!(chunks[0].0, 0);
-        assert_eq!(chunks.last().unwrap().1, samples.len());
-        for pair in chunks.windows(2) {
-            assert_eq!(
-                pair[0].1, pair[1].0,
-                "chunks must not overlap or lose samples"
-            );
-        }
-        for chunk in &chunks[..chunks.len() - 1] {
-            assert!(
-                (27.0..=33.0).contains(&chunk_secs(*chunk)),
-                "unexpected chunk duration: {}",
-                chunk_secs(*chunk)
-            );
-        }
-    }
-
-    #[test]
-    fn prefers_quiet_split_point() {
-        let mut samples = vec![0.8_f32; SAMPLE_RATE * 40];
-        let quiet_start = (29.0 * SAMPLE_RATE as f32) as usize;
-        let quiet_end = quiet_start + (0.3 * SAMPLE_RATE as f32) as usize;
-        for sample in &mut samples[quiet_start..quiet_end] {
-            *sample = 0.0001;
-        }
-
-        let chunks = split_chunks(&samples);
-        let first_split_secs = chunks[0].1 as f32 / SAMPLE_RATE as f32;
-
-        assert!(
-            (28.8..=30.2).contains(&first_split_secs),
-            "split was at {first_split_secs}s"
-        );
-    }
     #[test]
     fn overall_progress_counts_finished_and_current_work() {
         assert_eq!(overall_progress(0, 0, 0.0, 4), 0.0);
@@ -650,5 +624,21 @@ mod tests {
         assert_eq!(controller.state().status, QueueStatus::Paused);
         controller.set_paused(false);
         assert_eq!(controller.state().status, QueueStatus::Running);
+    }
+    #[test]
+    fn controller_can_stop_with_a_visible_error() {
+        let mut controller = QueueController::default();
+        controller.start(2).unwrap();
+        controller.begin_file("a", 0);
+        controller.fail_file();
+        controller.stop_with_error("FFmpeg недоступен");
+
+        let state = controller.state();
+        assert_eq!(state.status, QueueStatus::Error);
+        assert_eq!(state.message.as_deref(), Some("FFmpeg недоступен"));
+        assert!(
+            controller.start(2).is_ok(),
+            "a cleared queue can start again"
+        );
     }
 }

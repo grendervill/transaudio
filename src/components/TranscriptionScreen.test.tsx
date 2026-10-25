@@ -159,4 +159,20 @@ describe("TranscriptionScreen", () => {
     expect(screen.getAllByText(/пауза/i).length).toBeGreaterThan(0);
   });
 
+  it("shows the reason when a file fails", () => {
+    const failed = files.map((item) =>
+      item.id === "two"
+        ? {
+            ...item,
+            status: "error" as const,
+            segments: [],
+            error: "В файле нет аудиодорожки",
+          }
+        : item,
+    );
+    renderScreen({ files: failed, queue: { ...queue, status: "done", current_id: null } });
+
+    expect(screen.getByText("В файле нет аудиодорожки")).toBeInTheDocument();
+  });
+
 });
