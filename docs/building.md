@@ -7,7 +7,7 @@
 - Платформенные зависимости Tauri 2:
   - **macOS:** Xcode Command Line Tools.
   - **Windows:** Visual Studio Build Tools с C++ workload и WebView2 Runtime (в Windows 10/11 обычно уже есть).
-  - **Linux:** WebKitGTK 4.1, GTK/GLib, OpenSSL, librsvg и toolchain:
+  - **Linux:** Ubuntu 24.04 (glibc 2.39) или новее — предсобранный ONNX Runtime требует современный glibc. Нужны WebKitGTK 4.1, GTK/GLib, OpenSSL, librsvg и toolchain:
     ```bash
     sudo apt update
     sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
@@ -98,4 +98,4 @@ npm run tauri build
 
 ## GitHub Actions
 
-Workflow `.github/workflows/build.yml` собирает пять нативных целей: macOS Apple Silicon, Linux x64, Linux ARM64, Windows x64 и Windows ARM64. Для каждой цели запускаются `npm test`, `cargo test` и Tauri-сборка без подписи. Секреты для подписи в него не входят.
+Workflow `.github/workflows/build.yml` собирает пять нативных целей: macOS Apple Silicon, Linux x64, Linux ARM64, Windows x64 и Windows ARM64. Linux-сборка использует Ubuntu 24.04 — это требование предсобранного ONNX Runtime. Для каждой цели запускаются `npm test`, `cargo test` и Tauri-сборка без подписи. Секреты для подписи в него не входят.
