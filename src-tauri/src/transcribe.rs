@@ -229,9 +229,6 @@ impl QueueRuntime {
             return Err(error);
         }
         self.pause.store(false, Ordering::SeqCst);
-        if let Ok(mut results) = self.results.lock() {
-            results.clear();
-        }
         Ok(controller.state())
     }
 
@@ -640,5 +637,25 @@ mod tests {
             controller.start(2).is_ok(),
             "a cleared queue can start again"
         );
+    }
+    #[test]
+    fn starting_a_new_batch_keeps_finished_transcripts() {
+        let runtime = QueueRuntime::default();
+        runtime.results.lock().unwrap().insert(
+            "done".into(),
+            CompletedTranscript {
+                id: "done".into(),
+                name: "Готово.mp3".into(),
+                source_path: "/tmp/Готово.mp3".into(),
+                segments: Vec::new(),
+                duration_secs: 10.0,
+                saved_path: "/tmp/Готово.md".into(),
+            },
+        );
+
+        runtime.start(1).unwrap();
+
+        assert!(runtime.results.lock().unwrap().contains_key("done"));
+        runtime.finish();
     }
 }

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import App from "./App";
 import { createFakeBackend } from "./test/fakeBackend";
-import type { ModelStatus } from "./types";
+import type { FileUpdate, ModelStatus } from "./types";
 
 function renderApp() {
   return render(<App backend={createFakeBackend()} />);
@@ -214,4 +214,63 @@ describe("app shell", () => {
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Не удалось скачать модель")).toBeInTheDocument();
   });
+  it("starts only new files and opens a finished transcript on click", async () => {
+    const user = userEvent.setup();
+    let pushUpdate: (update: FileUpdate) => void = () => {};
+    const pickFiles = vi
+      .fn()
+      .mockResolvedValueOnce(["/tmp/a.mp3"])
+      .mockResolvedValueOnce(["/tmp/b.mp3"]);
+    const startTranscription = vi.fn(async () => ({
+      status: "running" as const,
+      overall_progress: 0,
+      current_id: null,
+      current_index: 0,
+      total: 1,
+      completed: 0,
+      failed: 0,
+      message: null,
+    }));
+    render(
+      <App
+        backend={createFakeBackend({
+          pickFiles,
+          startTranscription,
+          onFileUpdate: async (callback) => {
+            pushUpdate = callback;
+            return () => {};
+          },
+        })}
+      />,
+    );
+    await screen.findByRole("navigation", { name: "Основная навигация" });
+
+    await user.click(screen.getByRole("button", { name: "Добавить файлы" }));
+    pushUpdate({
+      id: "file-/tmp/a.mp3",
+      status: "completed",
+      progress: 100,
+      processed_secs: 9,
+      duration_secs: 9,
+      new_segments: [{ start: 0, end: 4, text: "Первый готовый текст." }],
+      saved_path: "/tmp/a.md",
+      error: null,
+    });
+    await screen.findByText("Готово");
+
+    await user.click(screen.getByRole("button", { name: "Добавить файлы" }));
+    await screen.findByText("b.mp3");
+
+    await user.click(screen.getByRole("button", { name: "Начать" }));
+    expect(startTranscription).toHaveBeenCalledWith([
+      { id: "file-/tmp/b.mp3", path: "/tmp/b.mp3", name: "b.mp3" },
+    ]);
+
+    await user.click(screen.getByRole("button", { name: /Файлы/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Открыть расшифровку a.mp3/ }),
+    );
+    expect(screen.getByText("Первый готовый текст.")).toBeInTheDocument();
+  });
+
 });

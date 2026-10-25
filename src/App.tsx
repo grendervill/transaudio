@@ -51,6 +51,7 @@ export default function App({ backend }: AppProps) {
   const [bootError, setBootError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -66,7 +67,9 @@ export default function App({ backend }: AppProps) {
       );
       cleanups.push(
         await backend.onFileUpdate((update) => {
-          if (alive) setFiles((current) => mergeFileUpdate(current, update));
+          if (!alive) return;
+          setFiles((current) => mergeFileUpdate(current, update));
+          if (update.status === "processing") setSelectedId(update.id);
         }),
       );
       cleanups.push(
@@ -263,31 +266,46 @@ export default function App({ backend }: AppProps) {
   };
 
   const start = async () => {
-    if (!files.length) return;
+    const pending = files.filter(
+      (file) => file.status === "queued" || file.status === "error",
+    );
+    if (!pending.length) return;
+    const pendingIds = new Set(pending.map((file) => file.id));
     try {
       const state = await backend.startTranscription(
-        files.map((file) => ({ id: file.id, path: file.path, name: file.name })),
+        pending.map((file) => ({ id: file.id, path: file.path, name: file.name })),
       );
       setFiles((current) =>
-        current.map((file) => ({
-          ...file,
-          status: "queued",
-          progress: 0,
-          processed_secs: null,
-          segments: [],
-          saved_path: null,
-          error: null,
-        })),
+        current.map((file) =>
+          pendingIds.has(file.id)
+            ? {
+                ...file,
+                status: "queued",
+                progress: 0,
+                processed_secs: null,
+                segments: [],
+                saved_path: null,
+                error: null,
+              }
+            : file,
+        ),
       );
       setQueue(state);
+      setSelectedId(pending[0].id);
       setScreen("transcribe");
     } catch (error) {
       notify(error instanceof Error ? error.message : String(error));
     }
   };
 
+  const openFile = (id: string) => {
+    setSelectedId(id);
+    setScreen("transcribe");
+  };
+
   const clearFiles = () => {
     setFiles([]);
+    setSelectedId(null);
     setQueue({
       status: "idle",
       overall_progress: 0,
@@ -327,6 +345,7 @@ export default function App({ backend }: AppProps) {
                 setFiles((current) => current.filter((file) => file.id !== id))
               }
               onStart={start}
+              onSelectFile={openFile}
               onClear={clearFiles}
               onChooseFolder={chooseFolder}
               onOpenSettings={() => setSettingsOpen(true)}
@@ -338,6 +357,8 @@ export default function App({ backend }: AppProps) {
               files={files}
               queue={queue}
               model={model}
+              selectedId={selectedId}
+              onSelectFile={openFile}
               onPause={handlePause}
               onOpenSettings={() => setSettingsOpen(true)}
               onNotify={notify}

@@ -46,6 +46,7 @@ function renderScreen(overrides: Partial<ComponentProps<typeof FilesScreen>> = {
     onAddPaths: vi.fn(),
     onRemoveFile: vi.fn(),
     onStart: vi.fn(),
+    onSelectFile: vi.fn(),
     onClear: vi.fn(),
     onChooseFolder: vi.fn(),
     onOpenSettings: vi.fn(),
@@ -118,6 +119,7 @@ describe("FilesScreen", () => {
       onAddPaths: vi.fn(),
       onRemoveFile: vi.fn(),
       onStart: vi.fn(),
+      onSelectFile: vi.fn(),
       onClear: vi.fn(),
       onChooseFolder: vi.fn(),
       onOpenSettings: vi.fn(),
@@ -131,13 +133,42 @@ describe("FilesScreen", () => {
     await waitFor(() => expect(onDragDrop).toHaveBeenCalledTimes(1));
   });
 
-  it("does not offer a second run over finished transcripts", async () => {
+  it("enables start again when a new file is added after a finished queue", () => {
+    const completed = {
+      ...file,
+      status: "completed" as const,
+      progress: 100,
+      segments: [{ start: 0, end: 3, text: "Готовый текст." }],
+    };
+    const fresh = { ...file, id: "f2", name: "Новая запись.mp3", status: "queued" as const };
+
+    renderScreen({ files: [completed], queueStatus: "done" });
+    expect(
+      screen.getByRole("button", { name: "Все файлы расшифрованы" }),
+    ).toBeDisabled();
+
+    renderScreen({ files: [completed, fresh], queueStatus: "done" });
+    expect(screen.getByRole("button", { name: "Начать" })).toBeEnabled();
+  });
+
+  it("opens a file transcript when its row is clicked", async () => {
+    const user = userEvent.setup();
+    const props = renderScreen({ files: [file] });
+
+    await user.click(
+      screen.getByRole("button", { name: /Открыть расшифровку Лекция 11/ }),
+    );
+    expect(props.onSelectFile).toHaveBeenCalledWith("f1");
+  });
+
+  it("allows clearing a finished queue without offering a rerun", async () => {
     const user = userEvent.setup();
     const onClear = vi.fn();
-    renderScreen({ files: [file], queueStatus: "done", onClear });
+    const completed = { ...file, status: "completed" as const, progress: 100 };
+    renderScreen({ files: [completed], queueStatus: "done", onClear });
 
     expect(
-      screen.getByRole("button", { name: "Транскрибация завершена" }),
+      screen.getByRole("button", { name: "Все файлы расшифрованы" }),
     ).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Очистить" }));
     expect(onClear).toHaveBeenCalled();
@@ -156,11 +187,12 @@ describe("FilesScreen", () => {
     expect(screen.getByText("FFmpeg не смог извлечь аудио")).toBeInTheDocument();
   });
 
-  it("shows a stopped queue and allows clearing it", () => {
-    renderScreen({ files: [file], queueStatus: "error" });
-    expect(
-      screen.getByRole("button", { name: "Очередь остановлена" }),
-    ).toBeDisabled();
+  it("keeps a failed file retryable", () => {
+    renderScreen({
+      files: [{ ...file, status: "error", error: "Не удалось" }],
+      queueStatus: "error",
+    });
+    expect(screen.getByRole("button", { name: "Начать" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Очистить" })).toBeEnabled();
   });
 

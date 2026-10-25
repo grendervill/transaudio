@@ -13,6 +13,7 @@ interface FilesScreenProps {
   onAddPaths: (paths: string[]) => void;
   onRemoveFile: (id: string) => void;
   onStart: () => void;
+  onSelectFile: (id: string) => void;
   onClear: () => void;
   onChooseFolder: () => void;
   onOpenSettings: () => void;
@@ -52,6 +53,7 @@ export function FilesScreen({
   onAddPaths,
   onRemoveFile,
   onStart,
+  onSelectFile,
   onClear,
   onChooseFolder,
   onOpenSettings,
@@ -59,10 +61,12 @@ export function FilesScreen({
 }: FilesScreenProps) {
   const [dragging, setDragging] = useState(false);
   const busy = queueStatus === "running" || queueStatus === "paused";
-  const stopped = queueStatus === "error";
-  const done = queueStatus === "done" || stopped;
-  const canStart =
-    files.length > 0 && model.stage === "ready" && !busy && !done;
+  const pending = files.filter(
+    (file) => file.status === "queued" || file.status === "error",
+  );
+  const completedCount = files.filter((file) => file.status === "completed").length;
+  const nothingPending = files.length > 0 && pending.length === 0;
+  const canStart = pending.length > 0 && model.stage === "ready" && !busy;
   const totalBytes = files.reduce((sum, file) => sum + file.size_bytes, 0);
   const knownDurations = files.reduce((sum, file) => sum + (file.duration_secs ?? 0), 0);
   const latest = useRef({ busy, onAddPaths, onNotify });
@@ -176,29 +180,36 @@ export function FilesScreen({
                     key={file.id}
                     className={`file-row file-${file.status}`}
                   >
-                    <span className="file-index mono">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                    <span className="file-kind">
-                      <FileGlyph extension={file.extension} />
-                    </span>
-                    <span className="file-copy">
-                      <strong>{file.name}</strong>
-                      <span>
-                        {file.extension} ·{" "}
-                        {file.duration_secs
-                          ? `${formatDuration(file.duration_secs)} · `
-                          : ""}
-                        {formatBytes(file.size_bytes)}
+                    <button
+                      className="file-select"
+                      type="button"
+                      onClick={() => onSelectFile(file.id)}
+                      aria-label={`Открыть расшифровку ${file.name}`}
+                    >
+                      <span className="file-index mono">
+                        {String(index + 1).padStart(2, "0")}
                       </span>
-                      {file.error ? (
-                        <span className="file-error-message">{file.error}</span>
-                      ) : null}
-                    </span>
-                    <span className={`file-status status-${file.status}`}>
-                      <StateDot status={file.status} />
-                      {stateLabel(file)}
-                    </span>
+                      <span className="file-kind">
+                        <FileGlyph extension={file.extension} />
+                      </span>
+                      <span className="file-copy">
+                        <strong>{file.name}</strong>
+                        <span>
+                          {file.extension} ·{" "}
+                          {file.duration_secs
+                            ? `${formatDuration(file.duration_secs)} · `
+                            : ""}
+                          {formatBytes(file.size_bytes)}
+                        </span>
+                        {file.error ? (
+                          <span className="file-error-message">{file.error}</span>
+                        ) : null}
+                      </span>
+                      <span className={`file-status status-${file.status}`}>
+                        <StateDot status={file.status} />
+                        {stateLabel(file)}
+                      </span>
+                    </button>
                     <button
                       className="row-action"
                       type="button"
@@ -216,9 +227,11 @@ export function FilesScreen({
               <span className="start-hint">
                 {busy
                   ? "Очередь уже выполняется"
-                  : files.length
-                    ? `${formatBytes(totalBytes)}${knownDurations ? ` · ${formatDuration(knownDurations)}` : ""}`
-                    : "Добавьте файлы, чтобы начать"}
+                  : files.length === 0
+                    ? "Добавьте файлы, чтобы начать"
+                    : pending.length === 0
+                      ? `${completedCount} готово · новых файлов нет`
+                      : `${pending.length} осталось · ${completedCount} готово · ${formatBytes(totalBytes)}${knownDurations ? ` · ${formatDuration(knownDurations)}` : ""}`}
               </span>
               <div className="start-actions">
                 {files.length > 0 && !busy ? (
@@ -232,12 +245,8 @@ export function FilesScreen({
                   onClick={onStart}
                   disabled={!canStart}
                 >
-                  <Icon name={done ? "check" : "play"} />
-                  {stopped
-                    ? "Очередь остановлена"
-                    : done
-                      ? "Транскрибация завершена"
-                      : "Начать"}
+                  <Icon name={nothingPending ? "check" : "play"} />
+                  {nothingPending ? "Все файлы расшифрованы" : "Начать"}
                 </button>
               </div>
             </div>

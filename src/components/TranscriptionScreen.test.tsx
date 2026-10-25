@@ -77,6 +77,8 @@ function renderScreen(overrides: Partial<ComponentProps<typeof TranscriptionScre
     files,
     queue,
     model,
+    selectedId: "two",
+    onSelectFile: vi.fn(),
     onPause: vi.fn(),
     onNotify: vi.fn(),
     onOpenSettings: vi.fn(),
@@ -97,25 +99,23 @@ describe("TranscriptionScreen", () => {
     expect(screen.getByText(/Компилятор — это не один шаг/)).toBeInTheDocument();
   });
 
-  it("keeps completed files compact and expands them on demand", async () => {
+  it("opens a completed file when its row is clicked", async () => {
     const user = userEvent.setup();
-    renderScreen();
+    const props = renderScreen();
 
-    const summary = screen.getByRole("button", {
-      name: /Интервью с Анной Петровой/,
-    });
-    expect(summary).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText(/меняется способ слушать/)).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: /Интервью с Анной Петровой/ }),
+    );
 
-    await user.click(summary);
-    expect(summary).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText(/меняется способ слушать/)).toBeInTheDocument();
+    expect(props.onSelectFile).toHaveBeenCalledWith("one");
   });
 
-  it("shows queued files in the sidebar without opening them", () => {
-    renderScreen();
+  it("shows a queued file in the sidebar and explains that it is not transcribed", () => {
+    renderScreen({ selectedId: "three" });
+
     expect(screen.getByText("Подкаст, выпуск 07.wav")).toBeInTheDocument();
-    expect(screen.queryByText(/Подкаст.*текст/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Файл ещё не расшифрован/)).toBeInTheDocument();
+    expect(screen.queryByText(/меняется способ слушать/)).not.toBeInTheDocument();
   });
 
   it("shows an empty state when nothing has been added", () => {
@@ -153,6 +153,7 @@ describe("TranscriptionScreen", () => {
     renderScreen({
       files: pausedFiles,
       queue: { ...queue, status: "paused" },
+      selectedId: "two",
     });
 
     expect(screen.getByText("Расшифровка на паузе.")).toBeInTheDocument();
@@ -170,7 +171,11 @@ describe("TranscriptionScreen", () => {
           }
         : item,
     );
-    renderScreen({ files: failed, queue: { ...queue, status: "done", current_id: null } });
+    renderScreen({
+      files: failed,
+      queue: { ...queue, status: "done", current_id: null },
+      selectedId: "two",
+    });
 
     expect(screen.getByText("В файле нет аудиодорожки")).toBeInTheDocument();
   });

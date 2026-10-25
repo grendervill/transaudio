@@ -46,8 +46,8 @@ export function createFakeBackend(overrides: Partial<Backend> = {}): Backend {
   const backend: Backend = {
     bootstrap: async () => defaultBootstrap,
     inspectFiles: async (paths: string[]): Promise<InspectFilesResult> => ({
-      files: paths.map<InspectedFile>((path, index) => ({
-        id: `file-${index}`,
+      files: paths.map<InspectedFile>((path) => ({
+        id: `file-${path}`,
         path,
         name: path.split(/[\\/]/).pop() ?? path,
         extension: "MP3",
