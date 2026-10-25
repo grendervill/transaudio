@@ -8,10 +8,12 @@ use crate::config::SettingsStore;
 use crate::model::{ModelManager, ModelPaths, StatusSink};
 use crate::state::{AppPaths, AppState};
 
+pub mod audio;
 pub mod commands;
 pub mod config;
 pub mod model;
 pub mod state;
+pub mod transcribe;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -46,6 +48,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
+            commands::inspect_files,
             commands::set_output_dir,
             commands::get_model_status,
             commands::grant_model_consent,

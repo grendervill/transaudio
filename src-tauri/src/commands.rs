@@ -54,3 +54,8 @@ pub fn download_model(state: State<'_, AppState>) -> Result<crate::model::ModelS
         .map_err(|error| error.to_string())?;
     Ok(state.model.status())
 }
+
+#[tauri::command]
+pub fn inspect_files(paths: Vec<String>) -> crate::audio::InspectFilesResult {
+    crate::audio::inspect_files(&paths)
+}
