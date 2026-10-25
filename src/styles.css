@@ -1,0 +1,51 @@
+:root {
+  font-family: "Golos Text", sans-serif;
+  color: #f0eee5;
+  background: #0e1210;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #0e1210;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  min-height: 100vh;
+}
+
+.rail {
+  border-right: 1px solid #303830;
+}
+
+.rail nav {
+  display: grid;
+  gap: 8px;
+  padding: 24px 12px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 20px auto 0;
+  border: 1px solid #e4aa58;
+  border-radius: 50%;
+  color: #e4aa58;
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+}
+
+.app-main {
+  padding: 32px;
+}
