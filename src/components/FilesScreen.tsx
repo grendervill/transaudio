@@ -18,6 +18,7 @@ interface FilesScreenProps {
   outputDir: string;
   diarizationEnabled: boolean;
   diarizationScenario: string;
+  diarizationSpeakers: number;
   diarizationStatus: DiarizationStatus;
   queueStatus: QueueStatus;
   onAddPaths: (paths: string[]) => void;
@@ -28,7 +29,11 @@ interface FilesScreenProps {
   onChooseFolder: () => void;
   onOpenSettings: () => void;
   onOpenModels: () => void;
-  onDiarizationChange: (enabled: boolean, scenario: string) => void;
+  onDiarizationChange: (
+    enabled: boolean,
+    scenario: string,
+    speakers: number,
+  ) => void;
   onNotify?: (message: string) => void;
 }
 
@@ -64,6 +69,7 @@ export function FilesScreen({
   outputDir,
   diarizationEnabled,
   diarizationScenario,
+  diarizationSpeakers,
   diarizationStatus,
   queueStatus,
   onAddPaths,
@@ -316,7 +322,11 @@ export function FilesScreen({
                   type="checkbox"
                   checked={diarizationEnabled}
                   onChange={(event) =>
-                    onDiarizationChange(event.target.checked, diarizationScenario)
+                    onDiarizationChange(
+                      event.target.checked,
+                      diarizationScenario,
+                      diarizationSpeakers,
+                    )
                   }
                   aria-label="Разделять спикеров"
                 />
@@ -329,14 +339,41 @@ export function FilesScreen({
               disabled={!diarizationEnabled}
               aria-label="Сценарий записи"
               onChange={(event) =>
-                onDiarizationChange(diarizationEnabled, event.target.value)
+                onDiarizationChange(
+                  diarizationEnabled,
+                  event.target.value,
+                  diarizationSpeakers,
+                )
               }
             >
-              <option value="interview">Интервью / диалог (2–3)</option>
+              <option value="interview">Интервью / диалог (2–4)</option>
               <option value="meeting">Встреча (4–6)</option>
               <option value="many">Много участников (7+)</option>
               <option value="auto">Авто</option>
             </select>
+            <label className="speaker-count">
+              <span>Сколько голосов</span>
+              <select
+                className="speaker-scenario"
+                value={diarizationSpeakers}
+                disabled={!diarizationEnabled}
+                aria-label="Число спикеров"
+                onChange={(event) =>
+                  onDiarizationChange(
+                    diarizationEnabled,
+                    diarizationScenario,
+                    Number(event.target.value),
+                  )
+                }
+              >
+                <option value={0}>Определить автоматически</option>
+                <option value={2}>2 спикера</option>
+                <option value={3}>3 спикера</option>
+                <option value={4}>4 спикера</option>
+                <option value={5}>5 спикеров</option>
+                <option value={6}>6 спикеров</option>
+              </select>
+            </label>
             {diarizationEnabled && diarizationStatus.stage === "downloading" ? (
               <div className="speaker-download">
                 <div

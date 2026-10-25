@@ -14,6 +14,7 @@ const settings: Settings = {
   canary_language: "ru",
   diarization: false,
   diarization_scenario: "interview",
+  diarization_speakers: 0,
 };
 
 const ready: ModelStatus = {

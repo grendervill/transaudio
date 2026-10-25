@@ -119,7 +119,11 @@ export default function App({ backend }: AppProps) {
     if (!settings?.diarization) return;
     if (!diarization || diarization.stage !== "not_downloaded") return;
     void backend
-      .setDiarization(true, settings.diarization_scenario)
+      .setDiarization(
+        true,
+        settings.diarization_scenario,
+        settings.diarization_speakers,
+      )
       .then(setDiarization)
       .catch(() => {});
   }, [settings?.diarization, diarization?.stage, backend]);
@@ -192,9 +196,13 @@ export default function App({ backend }: AppProps) {
     }
   };
 
-  const changeDiarization = async (enabled: boolean, scenario: string) => {
+  const changeDiarization = async (
+    enabled: boolean,
+    scenario: string,
+    speakers: number,
+  ) => {
     try {
-      const status = await backend.setDiarization(enabled, scenario);
+      const status = await backend.setDiarization(enabled, scenario, speakers);
       setDiarization(status);
       setSettings((current) =>
         current
@@ -202,6 +210,7 @@ export default function App({ backend }: AppProps) {
               ...current,
               diarization: enabled,
               diarization_scenario: scenario,
+              diarization_speakers: speakers,
             }
           : current,
       );
@@ -456,6 +465,7 @@ export default function App({ backend }: AppProps) {
               outputDir={settings.output_dir}
               diarizationEnabled={settings.diarization}
               diarizationScenario={settings.diarization_scenario}
+              diarizationSpeakers={settings.diarization_speakers}
               diarizationStatus={diarization}
               queueStatus={queue.status}
               onAddPaths={addPaths}

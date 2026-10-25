@@ -1,6 +1,6 @@
 [package]
 name = "transaudio"
-version = "0.2.0"
+version = "0.2.1"
 description = "Local audio and video transcription with Handy models"
 authors = ["Transaudio"]
 edition = "2021"

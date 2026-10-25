@@ -2891,3 +2891,14 @@ p {
     max-width: 150px;
   }
 }
+
+.speaker-count {
+  display: grid;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.speaker-count > span {
+  color: var(--muted-2);
+  font-size: 9.5px;
+}

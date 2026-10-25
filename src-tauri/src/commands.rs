@@ -252,12 +252,13 @@ pub fn set_diarization(
     app: tauri::AppHandle,
     enabled: bool,
     scenario: String,
+    speakers: u32,
     state: State<'_, AppState>,
 ) -> Result<crate::diarize::DiarizationStatus, String> {
     {
         let mut store = state.settings.lock().map_err(|_| "Настройки недоступны")?;
         store
-            .set_diarization(enabled, scenario)
+            .set_diarization(enabled, scenario, speakers)
             .map_err(|error| error.to_string())?;
     }
     if enabled && !state.diarization.is_ready() {
@@ -296,6 +297,7 @@ pub fn start_transcription(
         None
     };
     let scenario = settings.diarization_scenario.clone();
+    let speakers = settings.diarization_speakers;
     let queue_state = state.queue.start(files.len())?;
     let runtime = std::sync::Arc::clone(&state.queue);
     let model = std::sync::Arc::clone(&state.model);
@@ -314,6 +316,7 @@ pub fn start_transcription(
             runtime,
             diarization,
             scenario,
+            speakers,
         );
     });
     Ok(queue_state)

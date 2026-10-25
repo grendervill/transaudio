@@ -65,6 +65,7 @@ describe("app shell", () => {
               canary_language: "ru",
               diarization: false,
               diarization_scenario: "interview",
+              diarization_speakers: 0,
             },
             model: {
               model_id: "parakeet-tdt-0.6b-v3",
@@ -180,6 +181,7 @@ describe("app shell", () => {
               canary_language: "ru",
               diarization: false,
               diarization_scenario: "interview",
+              diarization_speakers: 0,
             },
             model: {
               model_id: "parakeet-tdt-0.6b-v3",

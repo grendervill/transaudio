@@ -36,6 +36,9 @@ pub struct Settings {
     pub diarization: bool,
     #[serde(default = "default_scenario")]
     pub diarization_scenario: String,
+    /// Exact number of speakers the user expects; 0 means automatic.
+    #[serde(default)]
+    pub diarization_speakers: u32,
 }
 
 fn default_model_id() -> String {
@@ -82,6 +85,7 @@ impl SettingsStore {
                 canary_language: default_canary_language(),
                 diarization: false,
                 diarization_scenario: default_scenario(),
+                diarization_speakers: 0,
             });
 
         let _ = ensure_output_dir(&settings.output_dir);
@@ -134,9 +138,15 @@ impl SettingsStore {
         self.save()
     }
 
-    pub fn set_diarization(&mut self, enabled: bool, scenario: String) -> Result<(), ConfigError> {
+    pub fn set_diarization(
+        &mut self,
+        enabled: bool,
+        scenario: String,
+        speakers: u32,
+    ) -> Result<(), ConfigError> {
         self.settings.diarization = enabled;
         self.settings.diarization_scenario = scenario;
+        self.settings.diarization_speakers = speakers;
         self.save()
     }
 }
@@ -253,6 +263,7 @@ mod tests {
         assert_eq!(settings.canary_language, "ru");
         assert!(!settings.diarization);
         assert_eq!(settings.diarization_scenario, "interview");
+        assert_eq!(settings.diarization_speakers, 0);
     }
 
     #[test]
@@ -263,7 +274,7 @@ mod tests {
             SettingsStore::load_or_default(&config_path, temp.path().join("out")).unwrap();
         store.set_model_id("gigaam-v3-e2e-rnnt".into()).unwrap();
         store.set_canary_language("en".into()).unwrap();
-        store.set_diarization(true, "meeting".into()).unwrap();
+        store.set_diarization(true, "meeting".into(), 3).unwrap();
 
         let reloaded =
             SettingsStore::load_or_default(&config_path, temp.path().join("fallback")).unwrap();
@@ -271,5 +282,6 @@ mod tests {
         assert_eq!(reloaded.settings().canary_language, "en");
         assert!(reloaded.settings().diarization);
         assert_eq!(reloaded.settings().diarization_scenario, "meeting");
+        assert_eq!(reloaded.settings().diarization_speakers, 3);
     }
 }

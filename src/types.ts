@@ -63,6 +63,8 @@ export interface Settings {
   canary_language: string;
   diarization: boolean;
   diarization_scenario: string;
+  /** Exact number of speakers; 0 means automatic. */
+  diarization_speakers: number;
 }
 
 export type QueueStatus = "idle" | "running" | "paused" | "done" | "error";
@@ -162,7 +164,11 @@ export interface Backend {
   selectModel(id: string, language?: string): Promise<ModelCard[]>;
   deleteModel(id: string): Promise<ModelCard[]>;
   setCanaryLanguage(language: string): Promise<Settings>;
-  setDiarization(enabled: boolean, scenario: string): Promise<DiarizationStatus>;
+  setDiarization(
+    enabled: boolean,
+    scenario: string,
+    speakers: number,
+  ): Promise<DiarizationStatus>;
   setOutputDir(path: string): Promise<Settings>;
   exportResults(ids: string[], format: ExportFormat): Promise<ExportResult>;
   openOutputDir(): Promise<void>;

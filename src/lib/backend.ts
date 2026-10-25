@@ -51,8 +51,12 @@ export function createTauriBackend(): Backend {
     deleteModel: (id) => invoke<ModelCard[]>("delete_model", { id }),
     setCanaryLanguage: (language) =>
       invoke<Settings>("set_canary_language", { language }),
-    setDiarization: (enabled, scenario) =>
-      invoke<DiarizationStatus>("set_diarization", { enabled, scenario }),
+    setDiarization: (enabled, scenario, speakers) =>
+      invoke<DiarizationStatus>("set_diarization", {
+        enabled,
+        scenario,
+        speakers,
+      }),
     setOutputDir: (path) => invoke<Settings>("set_output_dir", { path }),
     exportResults: (ids, format) =>
       invoke<ExportResult>("export_results", { ids, format }),

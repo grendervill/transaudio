@@ -47,6 +47,7 @@ function renderScreen(overrides: Partial<ComponentProps<typeof FilesScreen>> = {
     outputDir: "/Users/test/Documents/Transaudio",
     diarizationEnabled: false,
     diarizationScenario: "interview",
+    diarizationSpeakers: 0,
     diarizationStatus: {
       stage: "not_downloaded" as const,
       progress: 0,
@@ -130,6 +131,7 @@ describe("FilesScreen", () => {
       outputDir: "/tmp/out",
       diarizationEnabled: false,
       diarizationScenario: "interview",
+      diarizationSpeakers: 0,
       diarizationStatus: { stage: "not_downloaded" as const, progress: 0, error: null },
       queueStatus: "idle" as const,
       onAddPaths: vi.fn(),
@@ -212,6 +214,41 @@ describe("FilesScreen", () => {
     });
     expect(screen.getByRole("button", { name: "Начать" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Очистить" })).toBeEnabled();
+  });
+
+  it("lets the user pin the exact number of speakers", async () => {
+    const user = userEvent.setup();
+    const onDiarizationChange = vi.fn();
+    renderScreen({
+      diarizationEnabled: true,
+      diarizationSpeakers: 0,
+      onDiarizationChange,
+    });
+
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Число спикеров" }),
+      "3",
+    );
+
+    expect(onDiarizationChange).toHaveBeenCalledWith(true, "interview", 3);
+  });
+
+  it("switches diarization scenarios without losing the pinned count", async () => {
+    const user = userEvent.setup();
+    const onDiarizationChange = vi.fn();
+    renderScreen({
+      diarizationEnabled: true,
+      diarizationScenario: "interview",
+      diarizationSpeakers: 4,
+      onDiarizationChange,
+    });
+
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Сценарий записи" }),
+      "meeting",
+    );
+
+    expect(onDiarizationChange).toHaveBeenCalledWith(true, "meeting", 4);
   });
 
 });

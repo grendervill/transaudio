@@ -358,6 +358,7 @@ pub fn run_batch(
     runtime: Arc<QueueRuntime>,
     diarization: Option<Arc<DiarizationManager>>,
     scenario: String,
+    speakers: u32,
 ) {
     emit_queue(
         &app,
@@ -400,6 +401,7 @@ pub fn run_batch(
             job,
             diarization.as_deref(),
             &scenario,
+            speakers,
         ) {
             Ok(completed) => {
                 if let Ok(mut results) = runtime.results.lock() {
@@ -475,6 +477,7 @@ fn transcribe_file(
     job: &FileJob,
     diarization: Option<&DiarizationManager>,
     scenario: &str,
+    speakers: u32,
 ) -> Result<CompletedTranscript, FileFailure> {
     let temp = tempfile::Builder::new()
         .prefix("transaudio-")
@@ -488,7 +491,9 @@ fn transcribe_file(
         .map_err(FileFailure::File)?;
 
     let (all_segments, duration_secs) = if let Some(diarizer) = diarization {
-        transcribe_turns(app, model, runtime, job, &wav_path, diarizer, scenario)?
+        transcribe_turns(
+            app, model, runtime, job, &wav_path, diarizer, scenario, speakers,
+        )?
     } else {
         transcribe_chunks(app, model, runtime, job, &wav_path)?
     };
@@ -613,6 +618,7 @@ fn transcribe_chunks(
     Ok((all_segments, duration_secs))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn transcribe_turns(
     app: &AppHandle,
     model: &ModelManager,
@@ -621,6 +627,7 @@ fn transcribe_turns(
     wav_path: &Path,
     diarizer: &DiarizationManager,
     scenario: &str,
+    speakers: u32,
 ) -> Result<(Vec<EngineSegment>, f64), FileFailure> {
     let samples = read_wav_samples(wav_path).map_err(FileFailure::File)?;
     if samples.is_empty() {
@@ -635,7 +642,7 @@ fn transcribe_turns(
     emit_started(app, runtime, job, duration_secs);
 
     let turns = diarizer
-        .diarize(&samples, scenario)
+        .diarize(&samples, scenario, speakers)
         .map_err(FileFailure::Fatal)?;
     let mut all_segments = Vec::new();
     let mut last_progress = 5.0_f32;

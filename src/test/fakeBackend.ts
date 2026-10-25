@@ -22,6 +22,7 @@ const consentSettings: Settings = {
   canary_language: "ru",
   diarization: false,
   diarization_scenario: "interview",
+  diarization_speakers: 0,
 };
 
 const readyModel: ModelStatus = {
@@ -121,7 +122,11 @@ export function createFakeBackend(overrides: Partial<Backend> = {}): Backend {
       ...consentSettings,
       canary_language: language,
     }),
-    setDiarization: async (enabled: boolean, scenario: string): Promise<DiarizationStatus> => ({
+    setDiarization: async (
+      enabled: boolean,
+      _scenario: string,
+      _speakers: number,
+    ): Promise<DiarizationStatus> => ({
       stage: enabled ? "downloading" : "not_downloaded",
       progress: 0,
       error: null,

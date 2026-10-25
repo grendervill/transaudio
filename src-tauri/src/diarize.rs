@@ -194,7 +194,12 @@ impl DiarizationManager {
         Ok(())
     }
 
-    pub fn diarize(&self, samples: &[f32], scenario: &str) -> Result<Vec<Turn>, String> {
+    pub fn diarize(
+        &self,
+        samples: &[f32],
+        scenario: &str,
+        speakers: u32,
+    ) -> Result<Vec<Turn>, String> {
         if !self.is_ready() {
             return Err("Модели спикеров не подготовлены".into());
         }
@@ -238,7 +243,10 @@ impl DiarizationManager {
                 speaker: (segment.speaker + 1).max(1) as u32,
             })
             .collect();
-        Ok(post_process(&turns))
+        Ok(post_process_with_limit(
+            &turns,
+            speaker_limit(scenario, speakers),
+        ))
     }
 
     fn set_status(&self, mut status: DiarizationStatus) {
@@ -276,18 +284,40 @@ fn has_size(path: &Path, size: u64) -> bool {
         .unwrap_or(false)
 }
 
+/// Upper bound for automatic clustering. Scenarios promise a range, so the app
+/// must not show "Спикер 12" in a two-person interview. An explicit speaker
+/// count from the user wins over the scenario default.
+pub fn speaker_limit(scenario: &str, speakers: u32) -> Option<usize> {
+    if speakers >= 2 {
+        return Some(speakers as usize);
+    }
+    match scenario {
+        "interview" => Some(4),
+        "meeting" => Some(6),
+        "many" => Some(14),
+        _ => None,
+    }
+}
+
+/// Cosine threshold for sherpa's fast clustering. Higher values merge more
+/// aggressively. On a real 18-minute two-host recording CAM++ produced 15
+/// clusters at 0.45 and 4 significant voices at 0.60; the old defaults were
+/// far too low.
 pub fn scenario_threshold(scenario: &str) -> f32 {
     match scenario {
-        "meeting" => 0.35,
-        "many" => 0.30,
-        "auto" => 0.40,
-        _ => 0.45,
+        "meeting" => 0.55,
+        "many" => 0.45,
+        _ => 0.60,
     }
 }
 
 /// Merges short gaps, absorbs blips, pads boundaries and splits long turns.
 /// Speaker ids are renumbered in order of their first appearance.
 pub fn post_process(turns: &[Turn]) -> Vec<Turn> {
+    post_process_with_limit(turns, None)
+}
+
+pub fn post_process_with_limit(turns: &[Turn], limit: Option<usize>) -> Vec<Turn> {
     let mut sorted = turns.to_vec();
     sorted.sort_by(|left, right| left.start.total_cmp(&right.start));
     sorted.retain(|turn| turn.end > turn.start);
@@ -315,6 +345,12 @@ pub fn post_process(turns: &[Turn]) -> Vec<Turn> {
         }
         merged.push(turn);
     }
+
+    // Ghost clusters (a second or two of speech) look like extra participants
+    // but are usually noise or a single misassigned word. Give their turns to
+    // the nearest speaker that actually talks.
+    absorb_ghost_speakers(&mut merged);
+    merge_down_to_limit(&mut merged, limit);
 
     let mut out = Vec::new();
     let mut previous_padded_end = 0.0_f64;
@@ -351,6 +387,150 @@ pub fn post_process(turns: &[Turn]) -> Vec<Turn> {
         turn.speaker = id;
     }
     out
+}
+
+fn absorb_ghost_speakers(merged: &mut Vec<Turn>) {
+    if merged.len() < 3 {
+        return;
+    }
+    let speech: f64 = merged.iter().map(|turn| turn.end - turn.start).sum();
+    let mut totals: std::collections::HashMap<u32, f64> = std::collections::HashMap::new();
+    for turn in merged.iter() {
+        *totals.entry(turn.speaker).or_default() += turn.end - turn.start;
+    }
+    if totals.len() < 2 {
+        return;
+    }
+    // A 17-second ad inside an 18-minute recording is a real (if rare) voice;
+    // a one-second cluster is not. Keep the floor at 1% of speech, at least 2 s.
+    let floor = (speech * 0.01).max(2.0);
+    let ghosts: std::collections::HashSet<u32> = totals
+        .iter()
+        .filter(|(_, duration)| **duration < floor)
+        .map(|(speaker, _)| *speaker)
+        .collect();
+    if ghosts.is_empty() || ghosts.len() == totals.len() {
+        return;
+    }
+
+    for index in 0..merged.len() {
+        if !ghosts.contains(&merged[index].speaker) {
+            continue;
+        }
+        let previous = (0..index)
+            .rev()
+            .find(|candidate| !ghosts.contains(&merged[*candidate].speaker));
+        let next = (index + 1..merged.len())
+            .find(|candidate| !ghosts.contains(&merged[*candidate].speaker));
+        let speaker = match (previous, next) {
+            (Some(previous), Some(next)) => {
+                let gap_before = merged[index].start - merged[previous].end;
+                let gap_after = merged[next].start - merged[index].end;
+                if gap_before <= gap_after {
+                    merged[previous].speaker
+                } else {
+                    merged[next].speaker
+                }
+            }
+            (Some(previous), None) => merged[previous].speaker,
+            (None, Some(next)) => merged[next].speaker,
+            (None, None) => continue,
+        };
+        merged[index].speaker = speaker;
+    }
+
+    let mut compacted: Vec<Turn> = Vec::with_capacity(merged.len());
+    for turn in merged.drain(..) {
+        if let Some(previous) = compacted.last_mut() {
+            if previous.speaker == turn.speaker && turn.start - previous.end <= MAX_GAP_SECS {
+                previous.end = previous.end.max(turn.end);
+                continue;
+            }
+        }
+        compacted.push(turn);
+    }
+    *merged = compacted;
+}
+
+fn merge_down_to_limit(merged: &mut Vec<Turn>, limit: Option<usize>) {
+    let Some(limit) = limit else {
+        return;
+    };
+    loop {
+        let speakers: std::collections::HashSet<u32> =
+            merged.iter().map(|turn| turn.speaker).collect();
+        if speakers.len() <= limit || speakers.len() < 2 {
+            return;
+        }
+        merge_smallest_speaker(merged);
+    }
+}
+
+/// Merges the speaker with the least speech into the voice it is most often
+/// adjacent to. This is the last line of defence against a handful of
+/// two-second clusters looking like extra participants.
+fn merge_smallest_speaker(merged: &mut Vec<Turn>) {
+    let mut totals: std::collections::HashMap<u32, f64> = std::collections::HashMap::new();
+    for turn in merged.iter() {
+        *totals.entry(turn.speaker).or_default() += turn.end - turn.start;
+    }
+    let Some((&smallest, _)) = totals
+        .iter()
+        .min_by(|left, right| left.1.total_cmp(right.1).then_with(|| left.0.cmp(right.0)))
+    else {
+        return;
+    };
+
+    let mut neighbours: std::collections::HashMap<u32, f64> = std::collections::HashMap::new();
+    for pair in merged.windows(2) {
+        let (left, right) = (&pair[0], &pair[1]);
+        if left.speaker == smallest && right.speaker != smallest {
+            *neighbours.entry(right.speaker).or_default() += 1.0;
+        } else if right.speaker == smallest && left.speaker != smallest {
+            *neighbours.entry(left.speaker).or_default() += 1.0;
+        }
+    }
+    let target = neighbours
+        .into_iter()
+        .max_by(|left, right| {
+            left.1
+                .total_cmp(&right.1)
+                .then_with(|| {
+                    totals
+                        .get(&left.0)
+                        .unwrap_or(&0.0)
+                        .total_cmp(totals.get(&right.0).unwrap_or(&0.0))
+                })
+                .then_with(|| right.0.cmp(&left.0))
+        })
+        .map(|(speaker, _)| speaker)
+        .or_else(|| {
+            totals
+                .iter()
+                .filter(|(speaker, _)| **speaker != smallest)
+                .max_by(|left, right| left.1.total_cmp(right.1))
+                .map(|(speaker, _)| *speaker)
+        });
+    let Some(target) = target else {
+        return;
+    };
+
+    for turn in merged.iter_mut() {
+        if turn.speaker == smallest {
+            turn.speaker = target;
+        }
+    }
+    let mut compacted: Vec<Turn> = Vec::with_capacity(merged.len());
+    for turn in merged.drain(..) {
+        if let Some(previous) = compacted.last_mut() {
+            if previous.speaker == turn.speaker && turn.start - previous.end <= MAX_GAP_SECS {
+                previous.end = previous.end.max(turn.end);
+                continue;
+            }
+        }
+        compacted.push(turn);
+    }
+    *merged = compacted;
 }
 
 fn download(
@@ -430,11 +610,11 @@ mod tests {
 
     #[test]
     fn scenario_thresholds_match_the_spec() {
-        assert_eq!(scenario_threshold("interview"), 0.45);
-        assert_eq!(scenario_threshold("meeting"), 0.35);
-        assert_eq!(scenario_threshold("many"), 0.30);
-        assert_eq!(scenario_threshold("auto"), 0.40);
-        assert_eq!(scenario_threshold("unknown"), 0.45);
+        assert_eq!(scenario_threshold("interview"), 0.60);
+        assert_eq!(scenario_threshold("meeting"), 0.55);
+        assert_eq!(scenario_threshold("many"), 0.45);
+        assert_eq!(scenario_threshold("auto"), 0.60);
+        assert_eq!(scenario_threshold("unknown"), 0.60);
     }
 
     #[test]
@@ -500,5 +680,43 @@ mod tests {
         let manager = DiarizationManager::new(dir, Arc::new(|_| {}));
         assert_eq!(manager.status().stage, DiarizationStage::Ready);
         assert!(manager.is_ready());
+    }
+    #[test]
+    fn scenarios_limit_how_many_speakers_are_shown() {
+        assert_eq!(speaker_limit("interview", 0), Some(4));
+        assert_eq!(speaker_limit("meeting", 0), Some(6));
+        assert_eq!(speaker_limit("many", 0), Some(14));
+        assert_eq!(speaker_limit("auto", 0), None);
+        assert_eq!(speaker_limit("interview", 1), Some(4));
+        assert_eq!(speaker_limit("interview", 2), Some(2));
+        assert_eq!(speaker_limit("auto", 5), Some(5));
+    }
+
+    #[test]
+    fn merges_smallest_speakers_down_to_the_requested_count() {
+        let result = post_process_with_limit(
+            &[turn(0.0, 20.0, 1), turn(21.0, 25.0, 2), turn(26.0, 30.0, 3)],
+            Some(2),
+        );
+        let speakers: std::collections::HashSet<u32> =
+            result.iter().map(|turn| turn.speaker).collect();
+        assert_eq!(speakers.len(), 2);
+        // Speaker 2 is tied between 1 and 3, so it joins the larger neighbour 1.
+        assert_eq!(result[0].speaker, 1);
+        assert_eq!(result[1].speaker, 1);
+    }
+
+    #[test]
+    fn absorbs_ghost_speakers_into_the_nearest_voice() {
+        let result = post_process(&[turn(0.0, 5.0, 1), turn(5.1, 5.7, 2), turn(5.8, 12.0, 1)]);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].speaker, 1);
+    }
+
+    #[test]
+    fn keeps_short_but_real_third_speakers() {
+        let result = post_process(&[turn(0.0, 20.0, 1), turn(21.0, 29.0, 3), turn(30.0, 50.0, 1)]);
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[1].speaker, 2);
     }
 }
