@@ -520,6 +520,7 @@ fn transcribe_file(
                 start: offset,
                 end: chunk.end_sample as f64 / SAMPLE_RATE as f64,
                 text: result.text,
+                speaker: None,
             });
         }
         all_segments.extend(new_segments.iter().cloned());
@@ -558,6 +559,7 @@ fn transcribe_file(
         ExportFormat::Md,
         &all_segments,
         duration_secs,
+        &model.selected_name(),
     )
     .map_err(FileFailure::File)?
     .to_string_lossy()

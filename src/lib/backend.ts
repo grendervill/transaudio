@@ -12,6 +12,7 @@ import type {
   FileJob,
   FileUpdate,
   InspectFilesResult,
+  ModelCard,
   ModelStatus,
   QueueState,
   Settings,
@@ -39,8 +40,16 @@ export function createTauriBackend(): Backend {
     startTranscription: (files) =>
       invoke<QueueState>("start_transcription", { files }),
     setPaused: (paused) => invoke<QueueState>("set_paused", { paused }),
-    grantConsent: () => invoke<ModelStatus>("grant_model_consent"),
-    downloadModel: () => invoke<ModelStatus>("download_model"),
+    grantConsent: (id, language) =>
+      invoke<ModelStatus>("grant_model_consent", { id, language }),
+    downloadModel: (id, language) =>
+      invoke<ModelStatus>("download_model", { id, language }),
+    listModels: () => invoke<ModelCard[]>("list_models"),
+    selectModel: (id, language) =>
+      invoke<ModelCard[]>("select_model", { id, language }),
+    deleteModel: (id) => invoke<ModelCard[]>("delete_model", { id }),
+    setCanaryLanguage: (language) =>
+      invoke<Settings>("set_canary_language", { language }),
     setOutputDir: (path) => invoke<Settings>("set_output_dir", { path }),
     exportResults: (ids, format) =>
       invoke<ExportResult>("export_results", { ids, format }),

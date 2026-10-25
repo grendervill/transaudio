@@ -8,6 +8,7 @@ import { createFakeBackend } from "../test/fakeBackend";
 import { FilesScreen } from "./FilesScreen";
 
 const readyModel: ModelStatus = {
+  model_id: "parakeet-tdt-0.6b-v3",
   stage: "ready",
   progress: 100,
   downloaded_bytes: null,
@@ -17,6 +18,7 @@ const readyModel: ModelStatus = {
 
 const blockedModel: ModelStatus = {
   ...readyModel,
+  model_id: "parakeet-tdt-0.6b-v3",
   stage: "consent_required",
   progress: 0,
 };
@@ -41,6 +43,7 @@ function renderScreen(overrides: Partial<ComponentProps<typeof FilesScreen>> = {
     backend: createFakeBackend(),
     files: [],
     model: readyModel,
+    modelName: "Parakeet TDT 0.6B v3",
     outputDir: "/Users/test/Documents/Transaudio",
     queueStatus: "idle",
     onAddPaths: vi.fn(),
@@ -50,6 +53,7 @@ function renderScreen(overrides: Partial<ComponentProps<typeof FilesScreen>> = {
     onClear: vi.fn(),
     onChooseFolder: vi.fn(),
     onOpenSettings: vi.fn(),
+    onOpenModels: vi.fn(),
     ...overrides,
   };
   render(<FilesScreen {...props} />);
@@ -73,7 +77,7 @@ describe("FilesScreen", () => {
   it("blocks start while the model is not ready", () => {
     renderScreen({ files: [file], model: blockedModel });
     expect(screen.getByRole("button", { name: "Начать" })).toBeDisabled();
-    expect(screen.getByText(/модель не загружена/i)).toBeInTheDocument();
+    expect(screen.getByText(/не загружена/i)).toBeInTheDocument();
   });
 
   it("passes selected files from the native picker to the queue", async () => {
@@ -114,6 +118,7 @@ describe("FilesScreen", () => {
       backend,
       files: [],
       model: readyModel,
+      modelName: "Parakeet TDT 0.6B v3",
       outputDir: "/tmp/out",
       queueStatus: "idle" as const,
       onAddPaths: vi.fn(),
@@ -123,6 +128,7 @@ describe("FilesScreen", () => {
       onClear: vi.fn(),
       onChooseFolder: vi.fn(),
       onOpenSettings: vi.fn(),
+      onOpenModels: vi.fn(),
       onNotify: vi.fn(),
     };
     const { rerender } = render(<FilesScreen {...props} />);

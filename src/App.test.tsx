@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import App from "./App";
-import { createFakeBackend } from "./test/fakeBackend";
+import { createFakeBackend, defaultBootstrap } from "./test/fakeBackend";
 import type { FileUpdate, ModelStatus } from "./types";
 
 function renderApp() {
@@ -56,12 +56,18 @@ describe("app shell", () => {
       <App
         backend={createFakeBackend({
           bootstrap: async () => ({
+            ...defaultBootstrap,
             settings: {
               output_dir: "/tmp/out",
               model_consent: true,
               export_format: "md",
+              model_id: "parakeet-tdt-0.6b-v3",
+              canary_language: "ru",
+              diarization: false,
+              diarization_scenario: "interview",
             },
             model: {
+              model_id: "parakeet-tdt-0.6b-v3",
               stage: "consent_required",
               progress: 0,
               downloaded_bytes: null,
@@ -86,98 +92,78 @@ describe("app shell", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("shows download progress immediately after permission, before the backend replies", async () => {
+  it("shows the model picker on first run and downloads the chosen model", async () => {
     const user = userEvent.setup();
-    const grantConsent = vi.fn(
+    const downloadModel = vi.fn(
       () => new Promise<ModelStatus>(() => {}),
     );
     render(
       <App
         backend={createFakeBackend({
           bootstrap: async () => ({
+            ...defaultBootstrap,
             settings: {
-              output_dir: "/tmp/out",
+              ...defaultBootstrap.settings,
               model_consent: false,
-              export_format: "md",
             },
             model: {
+              ...defaultBootstrap.model,
               stage: "consent_required",
               progress: 0,
-              downloaded_bytes: null,
-              total_bytes: null,
-              error: null,
-            },
-            queue: {
-              status: "idle",
-              overall_progress: 0,
-              current_id: null,
-              current_index: 0,
-              total: 0,
-              completed: 0,
-              failed: 0,
             },
           }),
-          grantConsent,
+          downloadModel,
         })}
       />,
     );
 
-    await user.click(await screen.findByRole("button", { name: "Разрешить загрузку" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("GigaAM v3 E2E-RNNT")).toBeInTheDocument();
 
-    expect(
-      await screen.findByRole("progressbar", { name: "Загрузка модели" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Разрешить загрузку" }),
-    ).not.toBeInTheDocument();
-    expect(grantConsent).toHaveBeenCalledOnce();
+    const card = within(dialog)
+      .getByText("GigaAM v3 E2E-RNNT")
+      .closest("article");
+    await user.click(card?.querySelector("button") as HTMLButtonElement);
+
+    expect(downloadModel).toHaveBeenCalledWith("gigaam-v3-e2e-rnnt", undefined);
   });
 
-  it("keeps a failed consent attempt visible with a retry action", async () => {
+  it("keeps a failed model download visible", async () => {
     const user = userEvent.setup();
     render(
       <App
         backend={createFakeBackend({
           bootstrap: async () => ({
+            ...defaultBootstrap,
             settings: {
-              output_dir: "/tmp/out",
+              ...defaultBootstrap.settings,
               model_consent: false,
-              export_format: "md",
             },
             model: {
+              ...defaultBootstrap.model,
               stage: "consent_required",
               progress: 0,
-              downloaded_bytes: null,
-              total_bytes: null,
-              error: null,
-            },
-            queue: {
-              status: "idle",
-              overall_progress: 0,
-              current_id: null,
-              current_index: 0,
-              total: 0,
-              completed: 0,
-              failed: 0,
             },
           }),
-          grantConsent: async () => {
+          downloadModel: async () => {
             throw new Error("Нет соединения с сервером");
           },
         })}
       />,
     );
 
-    await user.click(await screen.findByRole("button", { name: "Разрешить загрузку" }));
-
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("Нет соединения с сервером")).toBeInTheDocument();
+    const card = within(dialog)
+      .getByText("GigaAM v3 E2E-RNNT")
+      .closest("article");
+    await user.click(card?.querySelector("button") as HTMLButtonElement);
+
     expect(
-      within(dialog).getByRole("button", { name: "Повторить" }),
-    ).toBeInTheDocument();
+      within(dialog).getAllByText("Нет соединения с сервером").length,
+    ).toBeGreaterThan(0);
     expect(
-      within(dialog).queryByRole("button", { name: "Разрешить загрузку" }),
-    ).not.toBeInTheDocument();
+      within(dialog).getAllByRole("button", { name: "Повторить" }).length,
+    ).toBeGreaterThan(0);
   });
 
   it("opens the model error on startup when a previous download failed", async () => {
@@ -185,12 +171,18 @@ describe("app shell", () => {
       <App
         backend={createFakeBackend({
           bootstrap: async () => ({
+            ...defaultBootstrap,
             settings: {
               output_dir: "/tmp/out",
               model_consent: true,
               export_format: "md",
+              model_id: "parakeet-tdt-0.6b-v3",
+              canary_language: "ru",
+              diarization: false,
+              diarization_scenario: "interview",
             },
             model: {
+              model_id: "parakeet-tdt-0.6b-v3",
               stage: "error",
               progress: 0,
               downloaded_bytes: null,
@@ -212,7 +204,9 @@ describe("app shell", () => {
     );
 
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("Не удалось скачать модель")).toBeInTheDocument();
+    expect(
+      within(dialog).getAllByText("Не удалось скачать модель").length,
+    ).toBeGreaterThan(0);
   });
   it("starts only new files and opens a finished transcript on click", async () => {
     const user = userEvent.setup();

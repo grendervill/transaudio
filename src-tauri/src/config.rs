@@ -28,6 +28,26 @@ pub struct Settings {
     pub output_dir: PathBuf,
     pub model_consent: bool,
     pub export_format: ExportFormat,
+    #[serde(default = "default_model_id")]
+    pub model_id: String,
+    #[serde(default = "default_canary_language")]
+    pub canary_language: String,
+    #[serde(default)]
+    pub diarization: bool,
+    #[serde(default = "default_scenario")]
+    pub diarization_scenario: String,
+}
+
+fn default_model_id() -> String {
+    "parakeet-tdt-0.6b-v3".into()
+}
+
+fn default_canary_language() -> String {
+    "ru".into()
+}
+
+fn default_scenario() -> String {
+    "interview".into()
 }
 
 #[derive(Debug, Error)]
@@ -58,6 +78,10 @@ impl SettingsStore {
                 output_dir: default_output_dir,
                 model_consent: false,
                 export_format: ExportFormat::default(),
+                model_id: default_model_id(),
+                canary_language: default_canary_language(),
+                diarization: false,
+                diarization_scenario: default_scenario(),
             });
 
         let _ = ensure_output_dir(&settings.output_dir);
@@ -97,6 +121,22 @@ impl SettingsStore {
 
     pub fn set_export_format(&mut self, format: ExportFormat) -> Result<(), ConfigError> {
         self.settings.export_format = format;
+        self.save()
+    }
+
+    pub fn set_model_id(&mut self, model_id: String) -> Result<(), ConfigError> {
+        self.settings.model_id = model_id;
+        self.save()
+    }
+
+    pub fn set_canary_language(&mut self, language: String) -> Result<(), ConfigError> {
+        self.settings.canary_language = language;
+        self.save()
+    }
+
+    pub fn set_diarization(&mut self, enabled: bool, scenario: String) -> Result<(), ConfigError> {
+        self.settings.diarization = enabled;
+        self.settings.diarization_scenario = scenario;
         self.save()
     }
 }
@@ -194,5 +234,42 @@ mod tests {
 
         assert!(custom.is_dir());
         assert_eq!(store.settings().output_dir, custom);
+    }
+    #[test]
+    fn migrates_settings_without_model_fields() {
+        let temp = TempDir::new().unwrap();
+        let config_path = temp.path().join("settings.json");
+        fs::write(
+            &config_path,
+            r#"{"output_dir":"/tmp/transaudio","model_consent":true,"export_format":"md"}"#,
+        )
+        .unwrap();
+
+        let store =
+            SettingsStore::load_or_default(&config_path, temp.path().join("fallback")).unwrap();
+        let settings = store.settings();
+
+        assert_eq!(settings.model_id, "parakeet-tdt-0.6b-v3");
+        assert_eq!(settings.canary_language, "ru");
+        assert!(!settings.diarization);
+        assert_eq!(settings.diarization_scenario, "interview");
+    }
+
+    #[test]
+    fn persists_model_and_diarization_settings() {
+        let temp = TempDir::new().unwrap();
+        let config_path = temp.path().join("settings.json");
+        let mut store =
+            SettingsStore::load_or_default(&config_path, temp.path().join("out")).unwrap();
+        store.set_model_id("gigaam-v3-e2e-rnnt".into()).unwrap();
+        store.set_canary_language("en".into()).unwrap();
+        store.set_diarization(true, "meeting".into()).unwrap();
+
+        let reloaded =
+            SettingsStore::load_or_default(&config_path, temp.path().join("fallback")).unwrap();
+        assert_eq!(reloaded.settings().model_id, "gigaam-v3-e2e-rnnt");
+        assert_eq!(reloaded.settings().canary_language, "en");
+        assert!(reloaded.settings().diarization);
+        assert_eq!(reloaded.settings().diarization_scenario, "meeting");
     }
 }

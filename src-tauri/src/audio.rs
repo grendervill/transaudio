@@ -12,7 +12,24 @@ pub const SUPPORTED_EXTENSIONS: &[&str] = &[
 ];
 
 pub fn read_wav_samples(path: &Path) -> Result<Vec<f32>, String> {
-    transcribe_rs::audio::read_wav_samples(path).map_err(|error| error.to_string())
+    let mut reader =
+        hound::WavReader::open(path).map_err(|error| format!("Не удалось открыть WAV: {error}"))?;
+    let spec = reader.spec();
+    if spec.channels != 1
+        || spec.sample_rate != SAMPLE_RATE as u32
+        || spec.bits_per_sample != 16
+        || spec.sample_format != hound::SampleFormat::Int
+    {
+        return Err("Ожидается WAV 16 кГц, mono, 16-bit PCM".into());
+    }
+    reader
+        .samples::<i16>()
+        .map(|sample| {
+            sample
+                .map(|value| value as f32 / i16::MAX as f32)
+                .map_err(|error| format!("Ошибка чтения WAV: {error}"))
+        })
+        .collect()
 }
 
 pub struct AudioEngine {

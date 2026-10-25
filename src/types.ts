@@ -3,12 +3,14 @@ export type ExportFormat = "md" | "srt" | "txt";
 
 export type ModelStage =
   | "consent_required"
+  | "not_installed"
   | "downloading"
   | "loading"
   | "ready"
   | "error";
 
 export interface ModelStatus {
+  model_id: string;
   stage: ModelStage;
   progress: number;
   downloaded_bytes: number | null;
@@ -17,10 +19,41 @@ export interface ModelStatus {
   revision?: number;
 }
 
+export type ModelFamily =
+  | "parakeet"
+  | "canary"
+  | "gigaam"
+  | "whisper"
+  | "sensevoice"
+  | "qwen";
+
+export interface ModelCard {
+  id: string;
+  name: string;
+  description: string;
+  family: ModelFamily;
+  languages: string[];
+  language_count: number;
+  quality_en: number | null;
+  quality_ru: number | null;
+  speed_x: number;
+  size_bytes: number;
+  license: string;
+  needs_language: boolean;
+  recommended_for: string[];
+  badge: string | null;
+  installed: boolean;
+  selected: boolean;
+}
+
 export interface Settings {
   output_dir: string;
   model_consent: boolean;
   export_format: ExportFormat;
+  model_id: string;
+  canary_language: string;
+  diarization: boolean;
+  diarization_scenario: string;
 }
 
 export type QueueStatus = "idle" | "running" | "paused" | "done" | "error";
@@ -39,6 +72,8 @@ export interface QueueState {
 export interface Bootstrap {
   settings: Settings;
   model: ModelStatus;
+  selected_model: string;
+  models: ModelCard[];
   queue: QueueState;
 }
 
@@ -66,6 +101,7 @@ export interface EngineSegment {
   start: number;
   end: number;
   text: string;
+  speaker?: number | null;
 }
 
 export interface FileUpdate {
@@ -110,8 +146,12 @@ export interface Backend {
   inspectFiles(paths: string[]): Promise<InspectFilesResult>;
   startTranscription(files: FileJob[]): Promise<QueueState>;
   setPaused(paused: boolean): Promise<QueueState>;
-  grantConsent(): Promise<ModelStatus>;
-  downloadModel(): Promise<ModelStatus>;
+  grantConsent(id?: string, language?: string): Promise<ModelStatus>;
+  downloadModel(id: string, language?: string): Promise<ModelStatus>;
+  listModels(): Promise<ModelCard[]>;
+  selectModel(id: string, language?: string): Promise<ModelCard[]>;
+  deleteModel(id: string): Promise<ModelCard[]>;
+  setCanaryLanguage(language: string): Promise<Settings>;
   setOutputDir(path: string): Promise<Settings>;
   exportResults(ids: string[], format: ExportFormat): Promise<ExportResult>;
   openOutputDir(): Promise<void>;

@@ -4,6 +4,7 @@ import { Icon } from "./Icon";
 interface TopbarProps {
   fileCount: number;
   model: ModelStatus;
+  modelName: string;
   onOpenSettings: () => void;
 }
 
@@ -22,7 +23,7 @@ function modelLabel(model: ModelStatus): string {
   }
 }
 
-export function Topbar({ fileCount, model, onOpenSettings }: TopbarProps) {
+export function Topbar({ fileCount, model, modelName, onOpenSettings }: TopbarProps) {
   return (
     <header className="topbar">
       <div className="project">
@@ -32,9 +33,9 @@ export function Topbar({ fileCount, model, onOpenSettings }: TopbarProps) {
         </span>
       </div>
       <div className="topbar-actions">
-        <div className={`model-chip is-${model.stage}`} title="Локальная модель Parakeet V3">
+        <div className={`model-chip is-${model.stage}`} title="Локальная модель">
           <span className={`pulse ${model.stage}`} />
-          <span>Parakeet V3</span>
+          <span className="model-chip-name">{modelName}</span>
           <span className="model-state">{modelLabel(model)}</span>
         </div>
         <button

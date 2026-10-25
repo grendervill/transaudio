@@ -7,6 +7,7 @@ import type { ModelStatus, QueueFile, QueueState } from "../types";
 import { TranscriptionScreen } from "./TranscriptionScreen";
 
 const model: ModelStatus = {
+  model_id: "parakeet-tdt-0.6b-v3",
   stage: "ready",
   progress: 100,
   downloaded_bytes: null,
@@ -77,6 +78,7 @@ function renderScreen(overrides: Partial<ComponentProps<typeof TranscriptionScre
     files,
     queue,
     model,
+    modelName: "Parakeet TDT 0.6B v3",
     selectedId: "two",
     onSelectFile: vi.fn(),
     onPause: vi.fn(),

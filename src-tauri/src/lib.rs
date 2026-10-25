@@ -11,6 +11,7 @@ use crate::state::{AppPaths, AppState};
 use crate::transcribe::QueueRuntime;
 
 pub mod audio;
+pub mod catalog;
 pub mod commands;
 pub mod config;
 pub mod export;
@@ -36,6 +37,10 @@ pub fn run() {
             commands::inspect_files,
             commands::set_output_dir,
             commands::get_model_status,
+            commands::list_models,
+            commands::select_model,
+            commands::delete_model,
+            commands::set_canary_language,
             commands::grant_model_consent,
             commands::download_model,
             commands::bootstrap,
@@ -87,7 +92,11 @@ fn setup_state(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     });
     let model_paths = ModelPaths::new(app_data.clone());
     let model = ModelManager::new(model_paths, sink);
-    model.start_on_launch(settings.settings().model_consent);
+    let selected = settings.settings().model_id.clone();
+    let hint = crate::catalog::find(&selected)
+        .filter(|spec| spec.needs_language)
+        .map(|_| settings.settings().canary_language.clone());
+    model.start_on_launch(settings.settings().model_consent, &selected, hint);
 
     let audio = Arc::new(AudioEngine::new(paths.bin.clone()));
     let queue = Arc::new(QueueRuntime::default());

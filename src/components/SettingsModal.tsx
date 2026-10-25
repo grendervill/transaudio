@@ -1,4 +1,3 @@
-import { formatBytes } from "../lib/format";
 import type { ModelStatus, Settings } from "../types";
 import { Icon } from "./Icon";
 import { Modal } from "./Modal";
@@ -7,10 +6,11 @@ interface SettingsModalProps {
   open: boolean;
   settings: Settings;
   model: ModelStatus;
+  modelName: string;
   onClose: () => void;
   onChooseFolder: () => void;
   onOpenFolder: () => void;
-  onAllowModel: () => void | Promise<void>;
+  onOpenModels: () => void;
   onRetryModel: () => void | Promise<void>;
 }
 
@@ -22,6 +22,8 @@ function modelStateLabel(model: ModelStatus): string {
       return `Загрузка ${Math.round(model.progress)}%`;
     case "loading":
       return "Запускается";
+    case "not_installed":
+      return "Не скачана";
     case "error":
       return "Ошибка";
     default:
@@ -33,10 +35,11 @@ export function SettingsModal({
   open,
   settings,
   model,
+  modelName,
   onClose,
   onChooseFolder,
   onOpenFolder,
-  onAllowModel,
+  onOpenModels,
   onRetryModel,
 }: SettingsModalProps) {
   return (
@@ -72,28 +75,33 @@ export function SettingsModal({
 
       <section className="settings-section">
         <div className="settings-model-head">
-          <div className="model-badge mono">V3</div>
           <div>
             <p className="aside-label">Модель</p>
-            <strong>Parakeet V3</strong>
+            <strong>{modelName}</strong>
             <p className="small muted">
               {model.stage === "ready"
                 ? "Загружена · работает офлайн"
-                : model.stage === "downloading"
-                  ? `${formatBytes(model.downloaded_bytes ?? 0)} из ${formatBytes(model.total_bytes ?? 0)}`
-                  : model.stage === "error"
-                    ? model.error ?? "Ошибка загрузки"
-                    : modelStateLabel(model)}
+                : model.stage === "error"
+                  ? model.error ?? "Ошибка загрузки"
+                  : modelStateLabel(model)}
             </p>
           </div>
-          <span className={`status-tag${model.stage === "error" ? " is-error" : " is-done"}`}>
+          <span
+            className={`status-tag${
+              model.stage === "error"
+                ? " is-error"
+                : model.stage === "ready"
+                  ? " is-done"
+                  : ""
+            }`}
+          >
             {modelStateLabel(model)}
           </span>
         </div>
         <p className="small settings-copy">
-          {settings.model_consent
-            ? "Разрешение на загрузку получено при первом запуске. Повторно разрешение не запрашивается. Модель стартует вместе с приложением."
-            : "Разрешение на загрузку ещё не получено. После него приложение не спросит снова."}
+          Разрешение на загрузку моделей получено. Новые модели скачиваются по
+          требованию, повторно приложение их не спрашивает. Модель стартует вместе с
+          приложением.
         </p>
         <div className="settings-row">
           <span>Запускать модель с приложением</span>
@@ -101,15 +109,20 @@ export function SettingsModal({
             <i />
           </span>
         </div>
-        {model.stage === "error" ? (
-          <button className="button button-quiet model-retry" type="button" onClick={() => void onRetryModel()}>
-            Повторить загрузку
+        <div className="settings-model-actions">
+          <button className="button button-quiet" type="button" onClick={onOpenModels}>
+            Сменить модель
           </button>
-        ) : model.stage === "consent_required" ? (
-          <button className="button button-accent model-retry" type="button" onClick={() => void onAllowModel()}>
-            Разрешить загрузку
-          </button>
-        ) : null}
+          {model.stage === "error" || model.stage === "not_installed" ? (
+            <button
+              className="button button-accent"
+              type="button"
+              onClick={() => void onRetryModel()}
+            >
+              {model.stage === "error" ? "Повторить загрузку" : "Скачать"}
+            </button>
+          ) : null}
+        </div>
       </section>
 
       <footer className="modal-foot">

@@ -43,20 +43,26 @@ pub fn render(
     name: &str,
     segments: &[EngineSegment],
     duration_secs: f64,
+    engine: &str,
 ) -> String {
     match format {
-        ExportFormat::Md => render_markdown(name, segments, duration_secs),
+        ExportFormat::Md => render_markdown(name, segments, duration_secs, engine),
         ExportFormat::Srt => render_srt(segments),
         ExportFormat::Txt => render_txt(segments),
     }
 }
 
-fn render_markdown(name: &str, segments: &[EngineSegment], duration_secs: f64) -> String {
+fn render_markdown(
+    name: &str,
+    segments: &[EngineSegment],
+    duration_secs: f64,
+    engine: &str,
+) -> String {
     let mut output = format!(
         "# {name}
 
 **Длительность:** {}
-**Движок:** Parakeet V3 · локально
+**Движок:** {engine} · локально
 
 ---
 
@@ -175,6 +181,7 @@ pub fn export_completed(
     output_dir: &Path,
     ids: &[String],
     format: ExportFormat,
+    engine: &str,
 ) -> Result<Vec<PathBuf>, String> {
     if ids.is_empty() {
         return Err("Выберите хотя бы одну расшифровку".into());
@@ -194,6 +201,7 @@ pub fn export_completed(
             format,
             &transcript.segments,
             transcript.duration_secs,
+            engine,
         )?);
     }
     Ok(written)
@@ -205,11 +213,12 @@ pub fn write_result(
     format: ExportFormat,
     segments: &[EngineSegment],
     duration_secs: f64,
+    engine: &str,
 ) -> Result<PathBuf, String> {
     fs::create_dir_all(output_dir)
         .map_err(|error| format!("Не удалось создать папку результатов: {error}"))?;
     let stem = safe_stem(name);
-    let content = render(format, name, segments, duration_secs);
+    let content = render(format, name, segments, duration_secs, engine);
     let mut attempt = 0_u32;
     loop {
         let filename = if attempt == 0 {
@@ -268,11 +277,13 @@ mod tests {
                 start: 3.0,
                 end: 7.5,
                 text: "Первая фраза.".into(),
+                speaker: None,
             },
             EngineSegment {
                 start: 8.25,
                 end: 12.0,
                 text: "Вторая фраза.".into(),
+                speaker: None,
             },
         ]
     }
@@ -294,7 +305,13 @@ mod tests {
 
     #[test]
     fn renders_srt() {
-        let output = render(ExportFormat::Srt, "Лекция", &segments(), 12.0);
+        let output = render(
+            ExportFormat::Srt,
+            "Лекция",
+            &segments(),
+            12.0,
+            "Parakeet TDT 0.6B v3",
+        );
         assert!(output.contains("1\n00:00:03,000 --> 00:00:07,500\nПервая фраза."));
         assert!(output.contains("2\n00:00:08,250 --> 00:00:12,000\nВторая фраза."));
         assert!(output.ends_with('\n'));
@@ -302,7 +319,13 @@ mod tests {
 
     #[test]
     fn renders_markdown_with_header_and_timecodes() {
-        let output = render(ExportFormat::Md, "Лекция", &segments(), 12.0);
+        let output = render(
+            ExportFormat::Md,
+            "Лекция",
+            &segments(),
+            12.0,
+            "Parakeet TDT 0.6B v3",
+        );
         assert!(output.starts_with("# Лекция\n"));
         assert!(output.contains("**Длительность:** 0:12"));
         assert!(output.contains("**[00:00:03]** Первая фраза."));
@@ -311,7 +334,13 @@ mod tests {
 
     #[test]
     fn renders_plain_text_without_timecodes() {
-        let output = render(ExportFormat::Txt, "Лекция", &segments(), 12.0);
+        let output = render(
+            ExportFormat::Txt,
+            "Лекция",
+            &segments(),
+            12.0,
+            "Parakeet TDT 0.6B v3",
+        );
         assert_eq!(output, "Первая фраза.\n\nВторая фраза.\n");
     }
 
@@ -336,6 +365,7 @@ mod tests {
             ExportFormat::Srt,
             &segments(),
             12.0,
+            "Parakeet TDT 0.6B v3",
         )
         .unwrap();
         assert_eq!(path.file_name().unwrap(), "Лекция 11.srt");
@@ -372,8 +402,14 @@ mod tests {
             },
         );
 
-        let written =
-            export_completed(&results, temp.path(), &["b".into()], ExportFormat::Srt).unwrap();
+        let written = export_completed(
+            &results,
+            temp.path(),
+            &["b".into()],
+            ExportFormat::Srt,
+            "Parakeet TDT 0.6B v3",
+        )
+        .unwrap();
 
         assert_eq!(written.len(), 1);
         assert_eq!(written[0].file_name().unwrap(), "Лекция.srt");
@@ -390,6 +426,7 @@ mod tests {
             temp.path(),
             &["missing".into()],
             ExportFormat::Txt,
+            "Parakeet TDT 0.6B v3",
         )
         .unwrap_err();
         assert!(error.contains("не найдена"));
@@ -397,10 +434,24 @@ mod tests {
     #[test]
     fn never_overwrites_an_existing_transcript() {
         let temp = TempDir::new().unwrap();
-        let first =
-            write_result(temp.path(), "Выпуск", ExportFormat::Md, &segments(), 12.0).unwrap();
-        let second =
-            write_result(temp.path(), "Выпуск", ExportFormat::Md, &segments(), 12.0).unwrap();
+        let first = write_result(
+            temp.path(),
+            "Выпуск",
+            ExportFormat::Md,
+            &segments(),
+            12.0,
+            "Parakeet TDT 0.6B v3",
+        )
+        .unwrap();
+        let second = write_result(
+            temp.path(),
+            "Выпуск",
+            ExportFormat::Md,
+            &segments(),
+            12.0,
+            "Parakeet TDT 0.6B v3",
+        )
+        .unwrap();
 
         assert_ne!(first, second);
         assert!(first.is_file());

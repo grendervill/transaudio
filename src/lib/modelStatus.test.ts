@@ -5,6 +5,7 @@ import { reconcileModelStatus } from "./modelStatus";
 
 function status(overrides: Partial<ModelStatus>): ModelStatus {
   return {
+    model_id: "parakeet-tdt-0.6b-v3",
     stage: "consent_required",
     progress: 0,
     downloaded_bytes: null,

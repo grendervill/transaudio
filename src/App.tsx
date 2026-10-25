@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { FilesScreen } from "./components/FilesScreen";
+import { ModelPickerModal } from "./components/ModelPickerModal";
 import { OnboardingModal } from "./components/OnboardingModal";
 import { ExportScreen } from "./components/ExportScreen";
 import { GlobalBar } from "./components/GlobalBar";
@@ -14,6 +15,7 @@ import type {
   Backend,
   Bootstrap,
   FileUpdate,
+  ModelCard,
   ModelStatus,
   QueueFile,
   QueueState,
@@ -52,6 +54,8 @@ export default function App({ backend }: AppProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [models, setModels] = useState<ModelCard[]>([]);
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -80,6 +84,7 @@ export default function App({ backend }: AppProps) {
       const data = await backend.bootstrap();
       if (!alive) return;
       setBootstrap(data);
+      setModels(data.models);
       setModel((current) =>
         current ? reconcileModelStatus(current, data.model) : data.model,
       );
@@ -87,6 +92,7 @@ export default function App({ backend }: AppProps) {
       setSettings(data.settings);
       setOnboardingOpen(
         data.model.stage === "error" ||
+          data.model.stage === "not_installed" ||
           (data.model.stage === "consent_required" && !data.settings.model_consent),
       );
     };
@@ -102,9 +108,81 @@ export default function App({ backend }: AppProps) {
   }, [backend]);
 
   useEffect(() => {
-    if (model?.stage === "ready") setOnboardingOpen(false);
+    if (model?.stage === "ready") {
+      setOnboardingOpen(false);
+      void refreshModels();
+    }
     if (model?.stage === "error") setOnboardingOpen(true);
   }, [model?.stage]);
+
+  const refreshModels = async () => {
+    try {
+      setModels(await backend.listModels());
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const selectedModel = models.find((card) => card.id === settings?.model_id) ?? null;
+
+  const selectModel = async (id: string) => {
+    try {
+      const cards = await backend.selectModel(
+        id,
+        models.find((card) => card.id === id)?.needs_language
+          ? settings?.canary_language
+          : undefined,
+      );
+      setModels(cards);
+      setSettings((current) => (current ? { ...current, model_id: id } : current));
+      notify(
+        cards.find((card) => card.id === id)?.installed
+          ? "Модель выбрана."
+          : "Скачайте модель, чтобы начать расшифровку.",
+      );
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const downloadModel = async (id: string) => {
+    const card = models.find((item) => item.id === id);
+    try {
+      const status = await backend.downloadModel(
+        id,
+        card?.needs_language ? settings?.canary_language : undefined,
+      );
+      setModel((current) => reconcileModelStatus(current, status));
+      setSettings((current) => (current ? { ...current, model_id: id } : current));
+      setModels(await backend.listModels());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setModel((current) =>
+        current ? { ...current, stage: "error", error: message, progress: 0 } : current,
+      );
+      notify(message);
+    }
+  };
+
+  const deleteModel = async (id: string) => {
+    const card = models.find((item) => item.id === id);
+    if (!card) return;
+    if (!window.confirm(`Удалить модель «${card.name}» с диска?`)) return;
+    try {
+      setModels(await backend.deleteModel(id));
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const chooseLanguage = async (language: string) => {
+    try {
+      setSettings(await backend.setCanaryLanguage(language));
+      setModels(await backend.listModels());
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error));
+    }
+  };
 
   const handlePause = useCallback(
     async (paused: boolean) => {
@@ -138,7 +216,7 @@ export default function App({ backend }: AppProps) {
         </div>
         <p className="kicker">Transaudio</p>
         <h1>Запускаем локальный движок</h1>
-        <p>Parakeet V3 остаётся на этом компьютере.</p>
+        <p>Модели остаются на этом компьютере.</p>
       </div>
     );
   }
@@ -219,7 +297,7 @@ export default function App({ backend }: AppProps) {
   const allowModel = async () => {
     markModelStarting();
     try {
-      const status = await backend.grantConsent();
+      const status = await backend.grantConsent(settings.model_id, settings.canary_language);
       setModel((current) => reconcileModelStatus(current, status));
       setSettings((current) =>
         current ? { ...current, model_consent: true } : current,
@@ -236,7 +314,7 @@ export default function App({ backend }: AppProps) {
   const retryModel = async () => {
     markModelStarting();
     try {
-      const status = await backend.downloadModel();
+      const status = await backend.downloadModel(settings.model_id, settings.canary_language);
       setModel((current) => reconcileModelStatus(current, status));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -330,6 +408,7 @@ export default function App({ backend }: AppProps) {
         <Topbar
           fileCount={files.length}
           model={model}
+          modelName={selectedModel?.name ?? "Модель"}
           onOpenSettings={() => setSettingsOpen(true)}
         />
         <main className="content">
@@ -338,6 +417,7 @@ export default function App({ backend }: AppProps) {
               backend={backend}
               files={files}
               model={model}
+              modelName={selectedModel?.name ?? "Модель"}
               outputDir={settings.output_dir}
               queueStatus={queue.status}
               onAddPaths={addPaths}
@@ -349,6 +429,7 @@ export default function App({ backend }: AppProps) {
               onClear={clearFiles}
               onChooseFolder={chooseFolder}
               onOpenSettings={() => setSettingsOpen(true)}
+              onOpenModels={() => setModelPickerOpen(true)}
               onNotify={notify}
             />
           )}
@@ -357,6 +438,7 @@ export default function App({ backend }: AppProps) {
               files={files}
               queue={queue}
               model={model}
+              modelName={selectedModel?.name ?? "Модель"}
               selectedId={selectedId}
               onSelectFile={openFile}
               onPause={handlePause}
@@ -379,13 +461,17 @@ export default function App({ backend }: AppProps) {
       </div>
       <OnboardingModal
         open={onboardingOpen && model.stage !== "ready"}
-        model={model}
-        onAllow={allowModel}
+        models={models}
+        status={model}
+        canaryLanguage={settings.canary_language}
+        onSelect={selectModel}
+        onDownload={downloadModel}
+        onLanguage={chooseLanguage}
         onRetry={retryModel}
         onDismiss={() => {
           setOnboardingOpen(false);
-          if (model.stage === "consent_required") {
-            notify("Модель не загружена. Разрешение можно дать в настройках.");
+          if (model.stage !== "downloading" && model.stage !== "loading") {
+            notify("Модель не загружена. Выбрать её можно в настройках.");
           }
         }}
       />
@@ -393,11 +479,27 @@ export default function App({ backend }: AppProps) {
         open={settingsOpen}
         settings={settings}
         model={model}
+        modelName={selectedModel?.name ?? "Модель"}
         onClose={() => setSettingsOpen(false)}
         onChooseFolder={chooseFolder}
         onOpenFolder={openOutputDir}
-        onAllowModel={allowModel}
+        onOpenModels={() => {
+          setSettingsOpen(false);
+          setModelPickerOpen(true);
+        }}
         onRetryModel={retryModel}
+      />
+      <ModelPickerModal
+        open={modelPickerOpen}
+        models={models}
+        status={model}
+        canaryLanguage={settings.canary_language}
+        busy={model.stage === "downloading" || model.stage === "loading"}
+        onClose={() => setModelPickerOpen(false)}
+        onSelect={selectModel}
+        onDownload={downloadModel}
+        onDelete={deleteModel}
+        onLanguage={chooseLanguage}
       />
       <Toast message={toast} onDone={() => setToast(null)} />
     </div>

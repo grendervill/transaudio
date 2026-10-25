@@ -8,6 +8,7 @@ interface TranscriptionScreenProps {
   files: QueueFile[];
   queue: QueueState;
   model: ModelStatus;
+  modelName: string;
   selectedId: string | null;
   onSelectFile: (id: string) => void;
   onPause: (paused: boolean) => void;
@@ -185,6 +186,7 @@ export function TranscriptionScreen({
   files,
   queue,
   model: _model,
+  modelName,
   selectedId,
   onSelectFile,
   onOpenSettings,
@@ -301,7 +303,7 @@ export function TranscriptionScreen({
             })}
           </ol>
           <div className="queue-foot">
-            <span className="mono muted">Parakeet V3 · локально</span>
+            <span className="mono muted">{modelName} · локально</span>
             <span className="mono muted">{files.length ? `${overall}%` : "—"}</span>
           </div>
         </aside>

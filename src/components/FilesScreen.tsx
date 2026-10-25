@@ -8,6 +8,7 @@ interface FilesScreenProps {
   backend: Backend;
   files: QueueFile[];
   model: ModelStatus;
+  modelName: string;
   outputDir: string;
   queueStatus: QueueStatus;
   onAddPaths: (paths: string[]) => void;
@@ -17,6 +18,7 @@ interface FilesScreenProps {
   onClear: () => void;
   onChooseFolder: () => void;
   onOpenSettings: () => void;
+  onOpenModels: () => void;
   onNotify?: (message: string) => void;
 }
 
@@ -48,6 +50,7 @@ export function FilesScreen({
   backend,
   files,
   model,
+  modelName,
   outputDir,
   queueStatus,
   onAddPaths,
@@ -57,6 +60,7 @@ export function FilesScreen({
   onClear,
   onChooseFolder,
   onOpenSettings,
+  onOpenModels,
   onNotify,
 }: FilesScreenProps) {
   const [dragging, setDragging] = useState(false);
@@ -265,18 +269,24 @@ export function FilesScreen({
             </button>
           </section>
           <section className="aside-block model-block">
-            <div className="model-badge mono">V3</div>
+            <div className="model-badge mono">
+              <Icon name="cpu" />
+            </div>
             <div>
               <p className="aside-label">Локальная модель</p>
-              <strong>Parakeet</strong>
+              <strong>{modelName}</strong>
               <p className="small muted">
                 {model.stage === "ready"
                   ? "Загружена · работает офлайн"
                   : model.stage === "error"
                     ? "Ошибка загрузки"
-                    : model.stage === "consent_required"
-                      ? "Модель не загружена"
-                      : `Подготовка · ${Math.round(model.progress)}%`}
+                    : model.stage === "downloading"
+                      ? `Загрузка · ${Math.round(model.progress)}%`
+                      : model.stage === "loading"
+                        ? "Запускается"
+                        : model.stage === "not_installed"
+                          ? "Не скачана"
+                          : "Не загружена"}
               </p>
             </div>
             <span
@@ -290,8 +300,8 @@ export function FilesScreen({
               Очередь обрабатывает записи одна за другой. Если поставить паузу,
               текущий фрагмент закончится и место в очереди сохранится.
             </p>
-            <button className="text-button" type="button" onClick={onOpenSettings}>
-              Параметры модели <Icon name="settings" />
+            <button className="text-button" type="button" onClick={onOpenModels}>
+              Сменить модель <Icon name="arrow-up-right" />
             </button>
           </section>
           <div className="side-note mono">TA // DESKTOP<br />LOCAL FIRST</div>
