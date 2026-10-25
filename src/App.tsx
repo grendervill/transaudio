@@ -79,7 +79,9 @@ export default function App({ backend }: AppProps) {
       setModel(data.model);
       setQueue(data.queue);
       setSettings(data.settings);
-      setOnboardingOpen(data.model.stage === "consent_required");
+      setOnboardingOpen(
+        data.model.stage === "consent_required" && !data.settings.model_consent,
+      );
     };
 
     subscribe().catch((error: unknown) => {

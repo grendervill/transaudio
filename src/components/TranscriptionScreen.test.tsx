@@ -122,4 +122,41 @@ describe("TranscriptionScreen", () => {
     renderScreen({ files: [], queue: { ...queue, current_id: null, status: "idle", total: 0 } });
     expect(screen.getByText("Здесь появится расшифровка.")).toBeInTheDocument();
   });
+  it("opens the most recent transcript when the queue is finished", () => {
+    const doneFiles = files.slice(0, 2).map((file) => ({
+      ...file,
+      status: "completed" as const,
+      progress: 100,
+    }));
+    renderScreen({
+      files: doneFiles,
+      queue: {
+        ...queue,
+        status: "done",
+        overall_progress: 100,
+        current_id: null,
+        current_index: 2,
+        total: 2,
+        completed: 2,
+      },
+    });
+
+    expect(
+      screen.getByText(/Компилятор — это не один шаг/),
+    ).toBeInTheDocument();
+  });
+
+  it("shows an intentional paused state instead of an empty transcript", () => {
+    const pausedFiles = files.map((file) =>
+      file.id === "two" ? { ...file, status: "paused" as const, segments: [] } : file,
+    );
+    renderScreen({
+      files: pausedFiles,
+      queue: { ...queue, status: "paused" },
+    });
+
+    expect(screen.getByText("Расшифровка на паузе.")).toBeInTheDocument();
+    expect(screen.getAllByText(/пауза/i).length).toBeGreaterThan(0);
+  });
+
 });

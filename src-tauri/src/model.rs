@@ -265,8 +265,20 @@ impl ModelManager {
         }
         let installed = is_model_installed(&self.paths.model_dir);
         match StartAction::for_state(installed, consent) {
-            StartAction::LoadInstalled => self.spawn_load(),
-            StartAction::Download => self.spawn_download(),
+            StartAction::LoadInstalled => {
+                self.set_status(ModelStatus::new(ModelStage::Loading));
+                self.spawn_load();
+            }
+            StartAction::Download => {
+                self.set_status(ModelStatus {
+                    stage: ModelStage::Downloading,
+                    progress: 0.0,
+                    downloaded_bytes: Some(0),
+                    total_bytes: None,
+                    error: None,
+                });
+                self.spawn_download();
+            }
             StartAction::WaitForConsent | StartAction::AlreadyBusy => {}
         }
     }

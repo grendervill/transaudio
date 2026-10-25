@@ -8,9 +8,9 @@ interface RailProps {
   onOpenSettings: () => void;
 }
 
-const NAV: Array<{ id: Screen; label: string; icon: string }> = [
+const NAV: Array<{ id: Screen; label: string; ariaLabel?: string; icon: string }> = [
   { id: "files", label: "Файлы", icon: "plus" },
-  { id: "transcribe", label: "Транскрипция", icon: "audio-waveform" },
+  { id: "transcribe", label: "Текст", ariaLabel: "Транскрипция", icon: "audio-waveform" },
   { id: "export", label: "Экспорт", icon: "folder-output" },
 ];
 
@@ -38,6 +38,8 @@ export function Rail({ screen, model, onNavigate, onOpenSettings }: RailProps) {
             type="button"
             className={`rail-link${screen === item.id ? " is-active" : ""}`}
             aria-current={screen === item.id ? "page" : undefined}
+            aria-label={item.ariaLabel ?? item.label}
+            title={item.ariaLabel ?? item.label}
             onClick={() => onNavigate(item.id)}
           >
             <Icon name={item.icon} />

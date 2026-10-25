@@ -50,4 +50,39 @@ describe("app shell", () => {
       ).toBeInTheDocument();
     });
   });
+  it("does not ask for permission again when consent is already persisted", async () => {
+    render(
+      <App
+        backend={createFakeBackend({
+          bootstrap: async () => ({
+            settings: {
+              output_dir: "/tmp/out",
+              model_consent: true,
+              export_format: "md",
+            },
+            model: {
+              stage: "consent_required",
+              progress: 0,
+              downloaded_bytes: null,
+              total_bytes: null,
+              error: null,
+            },
+            queue: {
+              status: "idle",
+              overall_progress: 0,
+              current_id: null,
+              current_index: 0,
+              total: 0,
+              completed: 0,
+              failed: 0,
+            },
+          }),
+        })}
+      />,
+    );
+
+    await screen.findByRole("navigation", { name: "Основная навигация" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
 });

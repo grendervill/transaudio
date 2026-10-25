@@ -32,12 +32,20 @@ function statusLabel(file: QueueFile): string {
   }
 }
 
-function SegmentList({ segments, live }: { segments: EngineSegment[]; live: boolean }) {
+function SegmentList({
+  segments,
+  live,
+  emptyLabel,
+}: {
+  segments: EngineSegment[];
+  live: boolean;
+  emptyLabel?: string;
+}) {
   if (segments.length === 0) {
     return (
       <div className="transcript-empty">
-        <span className="live-dot running" />
-        <span>{live ? "Слушаю запись…" : "Текст не распознан."}</span>
+        <span className={`live-dot ${live ? "running" : "paused"}`} />
+        <span>{emptyLabel ?? (live ? "Слушаю запись…" : "Текст не распознан.")}</span>
       </div>
     );
   }
@@ -112,7 +120,11 @@ function ActiveFile({
         {Math.round(file.progress)}%
       </p>
       <div className="reading-rule" />
-      <SegmentList segments={file.segments} live={!paused} />
+      <SegmentList
+        segments={file.segments}
+        live={!paused}
+        emptyLabel={paused ? "Расшифровка на паузе." : undefined}
+      />
     </article>
   );
 }
@@ -121,17 +133,22 @@ function CompletedFile({
   file,
   files,
   onCopy,
+  defaultOpen = false,
 }: {
   file: QueueFile;
   files: QueueFile[];
   onCopy: (text: string) => void;
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
+  useEffect(() => {
+    if (defaultOpen) setOpen(true);
+  }, [defaultOpen]);
   const index = files.findIndex((candidate) => candidate.id === file.id);
   const text = file.segments.map((segment) => segment.text).join("\n\n");
 
   return (
-    <article className={`file-block is-complete${open ? " is-open" : ""}`}>
+    <article className={`file-block is-complete${open ? " is-open" : ""}`} id={`transcript-${file.id}`}>
       <button
         className="file-summary"
         type="button"
@@ -180,8 +197,8 @@ export function TranscriptionScreen({
     [files],
   );
   const visible = [...completedFiles, ...(activeFile ? [activeFile] : [])];
-  const current = files.find((file) => file.id === queue.current_id) ?? activeFile;
   const overall = Math.round(queue.overall_progress);
+  const lastCompletedId = completedFiles.at(-1)?.id;
 
   useEffect(() => {
     if (!queue.current_id) return;
@@ -190,6 +207,14 @@ export function TranscriptionScreen({
       element.scrollIntoView({ block: "start", behavior: "smooth" });
     }
   }, [queue.current_id]);
+
+  useEffect(() => {
+    if (queue.status !== "done" || !lastCompletedId) return;
+    const element = document.getElementById(`transcript-${lastCompletedId}`);
+    if (element && typeof element.scrollIntoView === "function") {
+      element.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+  }, [queue.status, lastCompletedId]);
 
   async function copyText(text: string) {
     try {
@@ -214,6 +239,8 @@ export function TranscriptionScreen({
           <ol className="reel-list">
             {files.map((file, index) => {
               const active = isActive(file);
+              const effectiveStatus =
+                active && queue.status === "paused" ? "paused" : file.status;
               return (
                 <li
                   key={file.id}
@@ -226,13 +253,15 @@ export function TranscriptionScreen({
                     <span className="reel-copy">
                       <strong>{file.name}</strong>
                       <span>
-                        {file.status === "completed"
+                        {effectiveStatus === "completed"
                           ? "готово"
-                          : file.status === "processing"
+                          : effectiveStatus === "processing"
                             ? "текущий файл"
-                            : file.status === "error"
-                              ? "ошибка"
-                              : "в очереди"}
+                            : effectiveStatus === "paused"
+                              ? "пауза"
+                              : effectiveStatus === "error"
+                                ? "ошибка"
+                                : "в очереди"}
                       </span>
                     </span>
                     {active ? (
@@ -311,11 +340,11 @@ export function TranscriptionScreen({
                     file={file}
                     files={files}
                     onCopy={copyText}
+                    defaultOpen={queue.status === "done" && file.id === lastCompletedId}
                   />
                 ),
               )
             )}
-            {activeFile && current ? null : null}
           </div>
         </div>
       </div>
