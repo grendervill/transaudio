@@ -18,6 +18,10 @@ pub fn log(message: impl AsRef<str>) {
     let Some(path) = LOG_PATH.get() else {
         return;
     };
+    append(path, message.as_ref());
+}
+
+fn append(path: &Path, message: &str) {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -26,7 +30,7 @@ pub fn log(message: impl AsRef<str>) {
         .format(&Rfc3339)
         .unwrap_or_else(|_| "unknown-time".into());
     if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
-        let _ = writeln!(file, "[{timestamp}] {}", message.as_ref());
+        let _ = writeln!(file, "[{timestamp}] {message}");
     }
 }
 
@@ -50,15 +54,14 @@ mod tests {
     fn writes_lines_and_rotates_at_limit() {
         let temp = tempfile::TempDir::new().unwrap();
         let path = temp.path().join("transaudio.log");
-        let _ = LOG_PATH.set(path.clone());
 
-        log("first line");
+        append(&path, "first line");
         assert!(std::fs::read_to_string(&path)
             .unwrap()
             .contains("first line"));
 
         std::fs::write(&path, "x".repeat(1_048_600)).unwrap();
-        log("after rotation");
+        append(&path, "after rotation");
         assert!(path.with_extension("log.old").is_file());
         assert!(std::fs::read_to_string(&path)
             .unwrap()
