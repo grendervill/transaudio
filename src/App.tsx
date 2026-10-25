@@ -4,6 +4,7 @@ import { FilesScreen } from "./components/FilesScreen";
 import { GlobalBar } from "./components/GlobalBar";
 import { Rail } from "./components/Rail";
 import { Toast } from "./components/Toast";
+import { TranscriptionScreen } from "./components/TranscriptionScreen";
 import { Topbar } from "./components/Topbar";
 import type {
   Backend,
@@ -228,13 +229,14 @@ export default function App({ backend }: AppProps) {
             />
           )}
           {screen === "transcribe" && (
-            <section className="screen" aria-label="Транскрипция">
-              <div className="screen-placeholder">
-                <p className="kicker">Чтение</p>
-                <h1>Транскрипция</h1>
-                <p className="lead">Здесь появится текст расшифровки.</p>
-              </div>
-            </section>
+            <TranscriptionScreen
+              files={files}
+              queue={queue}
+              model={model}
+              onPause={handlePause}
+              onOpenSettings={() => setSettingsOpen(true)}
+              onNotify={notify}
+            />
           )}
           {screen === "export" && (
             <section className="screen" aria-label="Экспорт">

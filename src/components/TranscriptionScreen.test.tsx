@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -71,7 +72,7 @@ const queue: QueueState = {
   failed: 0,
 };
 
-function renderScreen(overrides: Partial<React.ComponentProps<typeof TranscriptionScreen>> = {}) {
+function renderScreen(overrides: Partial<ComponentProps<typeof TranscriptionScreen>> = {}) {
   const props: React.ComponentProps<typeof TranscriptionScreen> = {
     files,
     queue,

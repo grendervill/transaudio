@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -35,7 +36,7 @@ const file: QueueFile = {
   error: null,
 };
 
-function renderScreen(overrides: Partial<React.ComponentProps<typeof FilesScreen>> = {}) {
+function renderScreen(overrides: Partial<ComponentProps<typeof FilesScreen>> = {}) {
   const props: React.ComponentProps<typeof FilesScreen> = {
     backend: createFakeBackend(),
     files: [],
