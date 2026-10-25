@@ -1,2 +1,12 @@
 [env]
 MACOSX_DEPLOYMENT_TARGET = "13.0"
+# sherpa-onnx ships Windows static libraries built with the static CRT (/MT).
+# Build transcribe-cpp the same way and use the static CRT for Rust on Windows,
+# otherwise MSVC reports duplicate C++ runtime symbols.
+TRANSCRIBE_CMAKE_ARGS = "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
